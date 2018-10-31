@@ -14,16 +14,11 @@ import sys
 import time
 
 from pydicom.dataset import Dataset
-from pydicom.uid import (
-    ExplicitVRLittleEndian, ImplicitVRLittleEndian, ExplicitVRBigEndian
-)
+from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
+    ExplicitVRBigEndian
 
-from pynetdicom3 import (
-    AE,
-    QueryRetrievePresentationContexts,
-    PYNETDICOM_IMPLEMENTATION_VERSION,
-    PYNETDICOM_IMPLEMENTATION_UID
-)
+from pynetdicom3 import AE, StorageSOPClassList, QueryRetrieveSOPClassList
+from pynetdicom3.pdu_primitives import SCP_SCU_RoleSelectionNegotiation
 
 logger = logging.Logger('movescu')
 stream_logger = logging.StreamHandler()
@@ -31,10 +26,6 @@ formatter = logging.Formatter('%(levelname).1s: %(message)s')
 stream_logger.setFormatter(formatter)
 logger.addHandler(stream_logger)
 logger.setLevel(logging.ERROR)
-
-
-VERSION = '0.2.2'
-
 
 def _setup_argparser():
     """Setup the command line arguments"""
@@ -120,18 +111,6 @@ def _setup_argparser():
                           help="use patient/study only information model",
                           action="store_true")
 
-    # Output Options
-    out_opts = parser.add_argument_group('Output Options')
-    out_opts.add_argument('-od', "--output-directory", metavar="[d]irectory",
-                          help="write received objects to existing directory d",
-                          type=str)
-
-    # Miscellaneous
-    misc_opts = parser.add_argument_group('Miscellaneous')
-    misc_opts.add_argument('--ignore',
-                           help="receive data but don't store it",
-                           action="store_true")
-
     return parser.parse_args()
 
 args = _setup_argparser()
@@ -146,41 +125,96 @@ if args.debug:
     pynetdicom_logger = logging.getLogger('pynetdicom3')
     pynetdicom_logger.setLevel(logging.DEBUG)
 
-logger.debug('$movescu.py v{0!s}'.format(VERSION))
+logger.debug('$movescu.py v{0!s} {1!s} $'.format('0.1.0', '2016-03-15'))
 logger.debug('')
 
 # Create application entity
 # Binding to port 0 lets the OS pick an available port
-ae = AE(ae_title=args.calling_aet, port=0)
-ae.requested_contexts = QueryRetrievePresentationContexts
+ae = AE(ae_title=args.calling_aet,
+        port=0,
+        scu_sop_class=QueryRetrieveSOPClassList,
+        scp_sop_class=StorageSOPClassList,
+        transfer_syntax=[ExplicitVRLittleEndian])
 
-# Request association with remote AE
-assoc = ae.associate(args.peer, args.port, ae_title=args.called_aet)
+# Set the extended negotiation SCP/SCU role selection to allow us to receive
+#   C-STORE requests for the supported SOP classes
+ext_neg = []
+for context in ae.presentation_contexts_scu:
+    tmp = SCP_SCU_RoleSelectionNegotiation()
+    tmp.sop_class_uid = context.AbstractSyntax
+    tmp.scu_role = False
+    tmp.scp_role = True
 
+    ext_neg.append(tmp)
+
+# Request association with remote
+assoc = ae.associate(args.peer, args.port, args.called_aet, ext_neg=ext_neg)
+
+# Create query dataset
+d = Dataset()
+d.PatientName = '*'
+d.QueryRetrieveLevel = "PATIENT"
+
+if args.patient:
+    query_model = 'P'
+elif args.study:
+    query_model = 'S'
+elif args.psonly:
+    query_model = 'O'
+else:
+    query_model = 'P'
+
+def on_c_store(sop_class, dataset):
+    """
+    Function replacing ApplicationEntity.on_store(). Called when a dataset is
+    received following a C-STORE. Write the received dataset to file
+
+    Parameters
+    ----------
+    sop_class - pydicom.sop_class.StorageServiceClass
+        The StorageServiceClass representing the object
+    dataset - pydicom.Dataset
+        The DICOM dataset sent via the C-STORE
+
+    Returns
+    -------
+    status
+        A valid return status, see the StorageServiceClass for the
+        available statuses
+    """
+    filename = 'CT.{0!s}'.format(dataset.SOPInstanceUID)
+    logger.info('Storing DICOM file: {0!s}'.format(filename))
+
+    if os.path.exists(filename):
+        logger.warning('DICOM file already exists, overwriting')
+
+    #logger.debug("pydicom::Dataset()")
+    meta = Dataset()
+    meta.MediaStorageSOPClassUID = dataset.SOPClassUID
+    meta.MediaStorageSOPInstanceUID = '1.2.3'
+    meta.ImplementationClassUID = '1.2.3.4'
+
+    #logger.debug("pydicom::FileDataset()")
+    ds = FileDataset(filename, {}, file_meta=meta, preamble=b"\0" * 128)
+    ds.update(dataset)
+    ds.is_little_endian = True
+    ds.is_implicit_VR = True
+    #logger.debug("pydicom::save_as()")
+    ds.save_as(filename)
+
+    return sop_class.Success
+
+ae.on_c_store = on_c_store
+
+# Send query
 if assoc.is_established:
-    # Create query dataset
-    ds = Dataset()
-    ds.PatientName = '*'
-    ds.QueryRetrieveLevel = "PATIENT"
-
-    if args.patient:
-        query_model = 'P'
-    elif args.study:
-        query_model = 'S'
-    elif args.psonly:
-        query_model = 'O'
-    else:
-        query_model = 'P'
-
     if args.move_aet:
-        move_aet = args.move_aet
+        response = assoc.send_c_move(d, args.move_aet, query_model=query_model)
     else:
-        move_aet = args.calling_aet
+        response = assoc.send_c_move(d, args.calling_aet, query_model=query_model)
 
-    # Send query
-    response = assoc.send_c_move(ds, move_aet, query_model=query_model)
-
-    for (status, identifier) in response:
+    time.sleep(1)
+    for (status, d) in response:
         pass
 
     assoc.release()

@@ -11,13 +11,12 @@ import socket
 import sys
 import time
 
-from pydicom import dcmread
+from pydicom import read_file
 from pydicom.dataset import Dataset
-from pydicom.uid import (
-    ExplicitVRLittleEndian, ImplicitVRLittleEndian, ExplicitVRBigEndian
-)
+from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
+    ExplicitVRBigEndian
 
-from pynetdicom3 import AE, QueryRetrievePresentationContexts
+from pynetdicom3 import AE, QueryRetrieveSOPClassList
 
 logger = logging.Logger('findscp')
 stream_logger = logging.StreamHandler()
@@ -25,10 +24,6 @@ formatter = logging.Formatter('%(levelname).1s: %(message)s')
 stream_logger.setFormatter(formatter)
 logger.addHandler(stream_logger)
 logger.setLevel(logging.ERROR)
-
-
-VERSION = '0.2.1'
-
 
 def _setup_argparser():
     """Setup the command line arguments"""
@@ -126,7 +121,7 @@ if args.debug:
     pynetdicom_logger = logging.getLogger('pynetdicom3')
     pynetdicom_logger.setLevel(logging.DEBUG)
 
-logger.debug('$findscp.py v{0!s}'.format(VERSION))
+logger.debug('$findscp.py v{0!s} {1!s} $'.format('0.1.0', '2016-04-11'))
 logger.debug('')
 
 # Validate port
@@ -156,17 +151,16 @@ if args.prefer_big and ExplicitVRBigEndian in transfer_syntax:
         transfer_syntax.insert(0, ExplicitVRBigEndian)
 
 
-def on_c_find(dataset, context, info):
+def on_c_find(dataset):
     """Implement the ae.on_c_find callback."""
     basedir = '../../tests/dicom_files/'
     dcm_files = ['RTImageStorage.dcm']
     dcm_files = [os.path.join(basedir, x) for x in dcm_files]
     for dcm in dcm_files:
-        data = dcmread(dcm, force=True)
+        data = read_file(dcm, force=True)
 
         ds = Dataset()
-        if 'QueryRetrieveLevel' in dataset:
-            ds.QueryRetrieveLevel = dataset.QueryRetrieveLevel
+        ds.QueryRetrieveLevel = dataset.QueryRetrieveLevel
         ds.RetrieveAETitle = args.aetitle
         ds.PatientName = data.PatientName
 
@@ -176,9 +170,11 @@ def on_c_find(dataset, context, info):
 
 
 # Create application entity
-ae = AE(ae_title=args.aetitle, port=args.port)
-for context in QueryRetrievePresentationContexts:
-    ae.add_supported_context(context.abstract_syntax, transfer_syntax)
+ae = AE(ae_title=args.aetitle,
+        port=args.port,
+        scu_sop_class=[],
+        scp_sop_class=QueryRetrieveSOPClassList,
+        transfer_syntax=transfer_syntax)
 
 ae.maximum_pdu_size = args.max_pdu
 

@@ -22,44 +22,17 @@ from pynetdicom3.dimse_primitives import (C_STORE, C_FIND, C_GET, C_MOVE,
                                           N_ACTION, N_CREATE, N_DELETE,
                                           C_CANCEL)
 from pynetdicom3.pdu_primitives import P_DATA
-from pynetdicom3.sop_class import uid_to_service_class
+from pynetdicom3.sop_class import uid_to_sop_class
 from pynetdicom3.timer import Timer
 
 LOGGER = logging.getLogger('pynetdicom3.dimse')
-
-_RQ_TO_MESSAGE = {
-    C_ECHO : C_ECHO_RQ,
-    C_STORE : C_STORE_RQ,
-    C_FIND : C_FIND_RQ,
-    C_MOVE : C_MOVE_RQ,
-    C_GET : C_GET_RQ,
-    N_EVENT_REPORT : N_EVENT_REPORT_RQ,
-    N_GET : N_GET_RQ,
-    N_SET : N_SET_RQ,
-    N_ACTION : N_ACTION_RQ,
-    N_CREATE : N_CREATE_RQ,
-    N_DELETE : N_DELETE_RQ
-}
-_RSP_TO_MESSAGE = {
-    C_ECHO : C_ECHO_RSP,
-    C_STORE : C_STORE_RSP,
-    C_FIND : C_FIND_RSP,
-    C_MOVE : C_MOVE_RSP,
-    C_GET : C_GET_RSP,
-    C_CANCEL : C_CANCEL_RQ,
-    N_EVENT_REPORT : N_EVENT_REPORT_RSP,
-    N_GET : N_GET_RSP,
-    N_SET : N_SET_RSP,
-    N_ACTION : N_ACTION_RSP,
-    N_CREATE : N_CREATE_RSP,
-    N_DELETE : N_DELETE_RSP
-}
 
 
 class DIMSEServiceProvider(object):
     """The DIMSE service provider.
 
-    A DICOM AE uses the services provided by the DICOM Message Service Element
+    PS3.7 6.2
+    The DICOM AE uses the services provided by the DICOM Message Service Element
     (DIMSE). DIMSE specifies two sets of services.
 
     - DIMSE-C supports operations associated with composite SOP Classes and
@@ -100,8 +73,8 @@ class DIMSEServiceProvider(object):
 
     **Service Primitive Classes**
 
-    * DIMSE-C: C_ECHO, C_STORE, C_GET, C_FIND, C_MOVE
-    * DIMSE-N: N_EVENT_REPORT, N_GET, N_GET, N_ACTION, N_CREATE, N_DELETE
+    DIMSE-C: C_ECHO, C_STORE, C_GET, C_FIND, C_MOVE
+    DIMSE-N: N_EVENT_REPORT, N_GET, N_GET, N_ACTION, N_CREATE, N_DELETE
 
     **Protocol Machine**
 
@@ -118,90 +91,65 @@ class DIMSEServiceProvider(object):
 
     **Messages**
 
-    +----------------+-----------------------+------------------------+
-    | Primitive      | Type                  | Message Class          |
-    +----------------+-----------------------+------------------------+
-    | C-CANCEL       | Request/indication    | C_CANCEL_R             |
-    +----------------+-----------------------+------------------------+
-    | C-ECHO         | Request/indication    | C_ECHO_RQ              |
-    |                +-----------------------+------------------------+
-    |                | Response/confirmation | C_ECHO_RSP             |
-    +----------------+-----------------------+------------------------+
-    | C-FIND         | Request/indication    | C_FIND_RQ              |
-    |                +-----------------------+------------------------+
-    |                | Response/confirmation | C_FIND_RSP             |
-    +----------------+-----------------------+------------------------+
-    | C-GET          | Request/indication    | C_GET_RQ               |
-    |                +-----------------------+------------------------+
-    |                | Response/confirmation | C_GET_RSP              |
-    +----------------+-----------------------+------------------------+
-    | C-MOVE         | Request/indication    | C_MOVE_RQ              |
-    |                +-----------------------+------------------------+
-    |                | Response/confirmation | C_MOVE_RSP             |
-    +----------------+-----------------------+------------------------+
-    | C-STORE        | Request/indication    | C_STORE_RQ             |
-    |                +-----------------------+------------------------+
-    |                | Response/confirmation | C_STORE_RSP            |
-    +----------------+-----------------------+------------------------+
-    | N-ACTION       | Request/indication    | N_ACTION_RQ            |
-    |                +-----------------------+------------------------+
-    |                | Response/confirmation | N_ACTION_RSP           |
-    +----------------+-----------------------+------------------------+
-    | N-CREATE       | Request/indication    | N_CREATE_RQ            |
-    |                +-----------------------+------------------------+
-    |                | Response/confirmation | N_CREATE_RSP           |
-    +----------------+-----------------------+------------------------+
-    | N-DELETE       | Request/indication    | N_DELETE_RQ            |
-    |                +-----------------------+------------------------+
-    |                | Response/confirmation | N_DELETE_RSP           |
-    +----------------+-----------------------+------------------------+
-    | N-EVENT-REPORT | Request/indication    | N_EVENT_REPORT_RQ      |
-    |                +-----------------------+------------------------+
-    |                | Response/confirmation | N_EVENT_REPORT_RSP     |
-    +----------------+-----------------------+------------------------+
-    | N-GET          | Request/indication    | N_GET_RQ               |
-    |                +-----------------------+------------------------+
-    |                | Response/confirmation | N_GET_RSP              |
-    +----------------+-----------------------+------------------------+
-    | N-SET          | Request/indication    | N_SET_RQ               |
-    |                +-----------------------+------------------------+
-    |                | Response/confirmation | N_SET_RSP              |
-    +----------------+-----------------------+------------------------+
+    C-STORE:        Request/indication    - C_STORE_RQ
+                    Response/confirmation - C_STORE_RSP
+    C-FIND:         Request/indication        - C_FIND_RQ
+                    Response/confirmation     - C_FIND_RSP
+                    Cancel request/indication - C_CANCEL_RQ
+    C-GET:          Request/indication        - C_GET_RQ
+                    Response/confirmation     - C_GET_RSP
+                    Cancel request/indication - C_CANCEL_RQ
+    C-MOVE:         Request/indication    - C_MOVE_RQ
+                    Response/confirmation - C_MOVE_RSP
+                    Cancel request/indication - C_CANCEL_RQ
+    C-ECHO:         Request/indication    - C_ECHO_RQ
+                    Response/confirmation - C_ECHO_RSP
+    C-CANCEL:       Request/indication - C_CANCEL_RQ
+                    Response/confirmation - None
+    N-EVENT-REPORT: Request/indication    - N_EVENT_REPORT_RQ
+                    Response/confirmation - N_EVENT_REPORT_RSP
+    N-GET:          Request/indication    - N_GET_RQ
+                    Response/confirmation - N_GET_RSP
+    N-SET:          Request/indication    - N_SET_RQ
+                    Response/confirmation - N_SET_RSP
+    N-ACTION:       Request/indication    - N_ACTION_RQ
+                    Response/confirmation - N_ACTION_RSP
+    N-CREATE:       Request/indication    - N_CREATE_RQ
+                    Response/confirmation - N_CREATE_RSP
+    N-DELETE:       Request/indication    - N_DELETE_RQ
+                    Response/confirmation - N_DELETE_RSP
 
     Attributes
     ----------
-    dimse_timeout : numeric or None
-        The number of seconds before the DIMSE service timeout. A value of
-        ``None`` indicates no timeout.
-    dul : dul.DULServiceProvider
+    dimse_timeout : int or float or None
+        The number of seconds before the DIMSE service timeout. A value of None
+        indicates no timeout.
+    DUL : pynetdicom3.dul.DULServiceProvider
         The DICOM Upper Layer service provider.
     maximum_pdu_size : int
-            The maximum PDU size when sending DIMSE messages.
-    message : dimse_messages.DIMSEMessage
-        The DIMSE message.
-
-    References
-    ----------
-
-    * DICOM Standard, Part 7
+            The maximum PDU size when sending DIMSE messages
+    message : pynetdicom3.dimse_messages.DIMSEMessage
+        The DIMSE message
     """
     # pylint: disable=too-many-public-methods
+
     def __init__(self, dul, dimse_timeout=None, maximum_pdu_size=16382):
         """Start the DIMSE service provider.
 
         Parameters
         ----------
-        dul : dul.DULServiceProvider
+        dul : pynetdicom3.dul.DULServiceProvider
             The DICOM Upper Layer service provider.
         dimse_timeout : int or float or None
             The number of seconds before the DIMSE service timeout. A value of
             None indicates no timeout.
         maximum_pdu_size : int
-            The maximum PDU size when sending DIMSE messages, default 16382.
+            The maximum PDU size when sending DIMSE messages, default 31682.
         """
         self.dimse_timeout = dimse_timeout
         self.dul = dul
         self.maximum_pdu_size = maximum_pdu_size
+
         self.message = None
 
     def send_msg(self, primitive, context_id):
@@ -209,27 +157,96 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        primitive : dimse_primitives DIMSE Primitive class
-            The DIMSE message primitive to send to the peer.
+        primitive : pynetdicom3.dimse_primitives
+            The DIMSE service primitive to send to the peer.
         context_id : int
-            The ID of the presentation context that the message is to be
-            sent under.
+            The ID of the presentation context to be sent under.
         """
-        if primitive.MessageIDBeingRespondedTo is None:
-            dimse_msg = _RQ_TO_MESSAGE[primitive.__class__]()
-        else:
-            dimse_msg = _RSP_TO_MESSAGE[primitive.__class__]()
+        if primitive.__class__ == C_ECHO:
+            if primitive.MessageIDBeingRespondedTo is None:
+                dimse_msg = C_ECHO_RQ()
+            else:
+                dimse_msg = C_ECHO_RSP()
+
+        elif primitive.__class__ == C_STORE:
+            if primitive.MessageIDBeingRespondedTo is None:
+                dimse_msg = C_STORE_RQ()
+            else:
+                dimse_msg = C_STORE_RSP()
+
+        elif primitive.__class__ == C_FIND:
+            if primitive.MessageIDBeingRespondedTo is None:
+                dimse_msg = C_FIND_RQ()
+            else:
+                dimse_msg = C_FIND_RSP()
+
+        elif primitive.__class__ == C_GET:
+            if primitive.MessageIDBeingRespondedTo is None:
+                dimse_msg = C_GET_RQ()
+            else:
+                dimse_msg = C_GET_RSP()
+
+        elif primitive.__class__ == C_MOVE:
+            if primitive.MessageIDBeingRespondedTo is None:
+                dimse_msg = C_MOVE_RQ()
+            else:
+                dimse_msg = C_MOVE_RSP()
+
+        elif primitive.__class__ == C_CANCEL:
+            dimse_msg = C_CANCEL_RQ()
+
+        elif primitive.__class__ == N_EVENT_REPORT:
+            if primitive.MessageIDBeingRespondedTo is None:
+                dimse_msg = N_EVENT_REPORT_RQ()
+            else:
+                dimse_msg = N_EVENT_REPORT_RSP()
+
+        elif primitive.__class__ == N_GET:
+            if primitive.MessageIDBeingRespondedTo is None:
+                dimse_msg = N_GET_RQ()
+            else:
+                dimse_msg = N_GET_RSP()
+
+        elif primitive.__class__ == N_SET:
+            if primitive.MessageIDBeingRespondedTo is None:
+                dimse_msg = N_SET_RQ()
+            else:
+                dimse_msg = N_SET_RSP()
+
+        elif primitive.__class__ == N_ACTION:
+            if primitive.MessageIDBeingRespondedTo is None:
+                dimse_msg = N_ACTION_RQ()
+            else:
+                dimse_msg = N_ACTION_RSP()
+
+        elif primitive.__class__ == N_CREATE:
+            if primitive.MessageIDBeingRespondedTo is None:
+                dimse_msg = N_CREATE_RQ()
+            else:
+                dimse_msg = N_CREATE_RSP()
+
+        elif primitive.__class__ == N_DELETE:
+            if primitive.MessageIDBeingRespondedTo is None:
+                dimse_msg = N_DELETE_RQ()
+            else:
+                dimse_msg = N_DELETE_RSP()
 
         # Convert DIMSE primitive to DIMSE Message
         dimse_msg.primitive_to_message(primitive)
 
         # Callbacks
+        # FIXME: Make this a package level option to increase speed
+        # if LOG:
         self.on_send_dimse_message(dimse_msg)
 
         # Split the full messages into P-DATA chunks,
         #   each below the max_pdu size
-        for pdata in dimse_msg.encode_msg(context_id, self.maximum_pdu_size):
-            self.dul.send_pdu(pdata)
+        pdata_pdu_list = dimse_msg.encode_msg(
+            context_id, self.maximum_pdu_size)
+
+        # Send the P-DATA PDUs to the peer via the DUL provider
+        for pdata_pdu in pdata_pdu_list:
+            self.dul.send_pdu(pdata_pdu)
 
     def receive_msg(self, wait=False):
         """Receive a DIMSE message from the peer.
@@ -244,7 +261,7 @@ class DIMSEServiceProvider(object):
 
         Returns
         -------
-        dimse_messages.DIMSEMessage, int or None, None
+        pynetdicom3.dimse_messages.DIMSEMessage, int or None, None
             Returns the complete DIMSE message and its presentation context ID
             or None, None.
         """
@@ -300,10 +317,9 @@ class DIMSEServiceProvider(object):
                     return primitive, context_id
 
         else:
-            # Check to make sure the next PDU is a P-DATA-TF PDU
-            #   if not then return
-            pdu = self.dul.peek_next_pdu()
-            if not pdu or pdu.__class__ != P_DATA:
+            cls = self.dul.peek_next_pdu().__class__
+
+            if cls not in (type(None), P_DATA):
                 return None, None
 
             pdu = self.dul.receive_pdu(wait, self.dimse_timeout)
@@ -336,7 +352,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        message : dimse_messages.DIMSEMessage
+        message : pynetdicom3.dimse_messages.DIMSEMessage
             The DIMSE message to be sent.
         """
         callback = {C_ECHO_RQ: self.debug_send_c_echo_rq,
@@ -373,7 +389,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        message : dimse_messages.DIMSEMessage
+        message : pynetdicom3.dimse_messages.DIMSEMessage
             The DIMSE message that was received.
         """
         callback = {C_ECHO_RQ: self.debug_receive_c_echo_rq,
@@ -410,12 +426,12 @@ class DIMSEServiceProvider(object):
 
         **C-ECHO Request Parameters**
 
-        | (M) Message ID
-        | (M) Affected SOP Class UID
+        (M) Message ID
+        (M) Affected SOP Class UID
 
         Parameters
         ----------
-        msg : dimse_messages.C_ECHO_RQ
+        msg : pynetdicom3.dimse_messages.C_ECHO_RQ
             The C-ECHO-RQ message to be sent.
         """
         cs = msg.command_set
@@ -427,14 +443,14 @@ class DIMSEServiceProvider(object):
 
         **C-ECHO Response Parameters**
 
-        | (U) Message ID
-        | (M) Message ID Being Responded To
-        | (U) Affected SOP Class UID
-        | (M) Status
+        (U) Message ID
+        (M) Message ID Being Responded To
+        (U) Affected SOP Class UID
+        (M) Status
 
         Parameters
         ----------
-        msg : dimse_messages.C_ECHO_RSP
+        msg : pynetdicom3.dimse_messages.C_ECHO_RSP
             The C-ECHO-RSP message to be sent.
         """
         pass
@@ -445,17 +461,17 @@ class DIMSEServiceProvider(object):
 
         **C-STORE Request Elements**
 
-        | (M) Message ID
-        | (M) Affected SOP Class UID
-        | (M) Affected SOP Instance UID
-        | (M) Priority
-        | (U) Move Originator Application Entity Title
-        | (U) Move Originator Message ID
-        | (M) Data Set
+        (M) Message ID
+        (M) Affected SOP Class UID
+        (M) Affected SOP Instance UID
+        (M) Priority
+        (U) Move Originator Application Entity Title
+        (U) Move Originator Message ID
+        (M) Data Set
 
         Parameters
         ----------
-        msg : dimse_messages.C_STORE_RQ
+        msg : pynetdicom3.dimse_messages.C_STORE_RQ
             The C-STORE-RQ message to be sent.
         """
         cs = msg.command_set
@@ -466,7 +482,7 @@ class DIMSEServiceProvider(object):
         priority = priority_str[cs.Priority]
 
         dataset = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
+        if msg.data_set.getvalue() != b'':
             dataset = 'Present'
 
         if cs.AffectedSOPClassUID.name == 'CT Image Storage':
@@ -501,15 +517,15 @@ class DIMSEServiceProvider(object):
 
         **C-STORE Response Elements**
 
-        | (U) Message ID
-        | (M) Message ID Being Responded To
-        | (U) Affected SOP Class UID
-        | (U) Affected SOP Instance UID
-        | (M) Status
+        (U) Message ID
+        (M) Message ID Being Responded To
+        (U) Affected SOP Class UID
+        (U) Affected SOP Instance UID
+        (M) Status
 
         Parameters
         ----------
-        msg : dimse_messages.C_STORE_RSP
+        msg : pynetdicom3.dimse_messages.C_STORE_RSP
             The C-STORE-RSP message to be sent.
         """
         pass
@@ -520,14 +536,14 @@ class DIMSEServiceProvider(object):
 
         **C-FIND Request Parameters**
 
-        | (M) Message ID
-        | (M) Affected SOP Class UID
-        | (M) Priority
-        | (M) Identifier
+        (M) Message ID
+        (M) Affected SOP Class UID
+        (M) Priority
+        (M) Identifier
 
         Parameters
         ----------
-        msg : dimse_messages.C_FIND_RQ
+        msg : pynetdicom3.dimse_messages.C_FIND_RQ
             The C-FIND-RQ message to be sent.
         """
         cs = msg.command_set
@@ -538,10 +554,10 @@ class DIMSEServiceProvider(object):
         priority = priority_str[cs.Priority]
 
         dataset = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
+        if msg.data_set.getvalue() != b'':
             dataset = 'Present'
 
-        LOGGER.info("Sending Find Request: MsgID %s", cs.MessageID)
+        LOGGER.info("Sending Get Request: MsgID %s", cs.MessageID)
 
         s = []
         s.append('===================== OUTGOING DIMSE MESSAGE ================'
@@ -551,7 +567,7 @@ class DIMSEServiceProvider(object):
         s.append('Message ID                    : {0!s}'.format(cs.MessageID))
         s.append('Affected SOP Class UID        : {0!s}'
                  .format(cs.AffectedSOPClassUID))
-        s.append('Identifier                    : {0!s}'.format(dataset))
+        s.append('Data Set                      : {0!s}'.format(dataset))
         s.append('Priority                      : {0!s}'.format(priority))
         s.append('======================= END DIMSE MESSAGE ==================='
                  '====')
@@ -565,21 +581,23 @@ class DIMSEServiceProvider(object):
 
         **C-FIND Response Parameters**
 
-        | (U) Message ID
-        | (M) Message ID Being Responded To
-        | (U) Affected SOP Class UID
-        | (C) Identifier
-        | (M) Status
+        (U) Message ID
+        (M) Message ID Being Responded To
+        (U) Affected SOP Class UID
+        (C) Identifier
+        (M) Status
 
         Parameters
         ----------
-        msg : dimse_messages.C_FIND_RSP
+        msg : pynetdicom3.dimse_messages.C_FIND_RSP
             The C-FIND-RSP message to be sent.
+
+        TODO: Add in the extra status related elements if present
         """
         cs = msg.command_set
 
         dataset = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
+        if msg.data_set.getvalue() != b'':
             dataset = 'Present'
 
         s = []
@@ -606,14 +624,14 @@ class DIMSEServiceProvider(object):
 
         **C-GET Request Parameters**
 
-        | (M) Message ID
-        | (M) Affected SOP Class UID
-        | (M) Priority
-        | (M) Identifier
+        (M) Message ID
+        (M) Affected SOP Class UID
+        (M) Priority
+        (M) Identifier
 
         Parameters
         ----------
-        msg : dimse_messages.C_GET_RQ
+        msg : pynetdicom3.dimse_messages.C_GET_RQ
             The C-GET-RQ message to be sent.
         """
         cs = msg.command_set
@@ -624,7 +642,7 @@ class DIMSEServiceProvider(object):
         priority = priority_str[cs.Priority]
 
         dataset = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
+        if msg.data_set.getvalue() != b'':
             dataset = 'Present'
 
         LOGGER.info("Sending Get Request: MsgID %s", cs.MessageID)
@@ -649,25 +667,27 @@ class DIMSEServiceProvider(object):
 
         **C-GET Response Parameters**
 
-        | (U) Message ID
-        | (M) Message ID Being Responded To
-        | (U) Affected SOP Class UID
-        | (U) Identifier
-        | (M) Status
-        | (C) Number of Remaining Sub-operations
-        | (C) Number of Completed Sub-operations
-        | (C) Number of Failed Sub-operations
-        | (C) Number of Warning Sub-operations
+        (U) Message ID
+        (M) Message ID Being Responded To
+        (U) Affected SOP Class UID
+        (U) Identifier
+        (M) Status
+        (C) Number of Remaining Sub-operations
+        (C) Number of Completed Sub-operations
+        (C) Number of Failed Sub-operations
+        (C) Number of Warning Sub-operations
 
         Parameters
         ----------
-        msg : dimse_messages.C_GET_RSP
+        msg : pynetdicom3.dimse_messages.C_GET_RSP
             The C-GET-RSP message to be sent.
+
+        TODO: Add in the extra status related elements if present
         """
         cs = msg.command_set
 
         dataset = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
+        if msg.data_set.getvalue() != b'':
             dataset = 'Present'
 
         affected_sop = getattr(cs, 'AffectedSOPClassUID', 'None')
@@ -696,15 +716,15 @@ class DIMSEServiceProvider(object):
 
         **C-MOVE Request Parameters**
 
-        | (M) Message ID
-        | (M) Affected SOP Class UID
-        | (M) Priority
-        | (M) Move Destination
-        | (M) Identifier
+        (M) Message ID
+        (M) Affected SOP Class UID
+        (M) Priority
+        (M) Move Destination
+        (M) Identifier
 
         Parameters
         ----------
-        msg : dimse_messages.C_MOVE_RQ
+        msg : pynetdicom3.dimse_messages.C_MOVE_RQ
             The C-MOVE-RQ message to be sent.
         """
         cs = msg.command_set
@@ -715,7 +735,7 @@ class DIMSEServiceProvider(object):
         priority = priority_str[cs.Priority]
 
         identifier = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
+        if msg.data_set.getvalue() != b'':
             identifier = 'Present'
 
         LOGGER.info("Sending Move Request: MsgID %s", cs.MessageID)
@@ -728,7 +748,7 @@ class DIMSEServiceProvider(object):
         s.append('Affected SOP Class UID        : {0!s}'
                  .format(cs.AffectedSOPClassUID))
         s.append('Move Destination              : {0!s}'
-                 .format(cs.MoveDestination))
+                 .format(cs.MoveDestination.decode('utf-8')))
         s.append('Identifier                    : {0!s}'.format(identifier))
         s.append('Priority                      : {0!s}'.format(priority))
         s.append('======================= END DIMSE MESSAGE ==================='
@@ -743,20 +763,22 @@ class DIMSEServiceProvider(object):
 
         **C-MOVE Response Parameters**
 
-        | (U) Message ID
-        | (M) Message ID Being Responded To
-        | (U) Affected SOP Class UID
-        | (U) Identifier
-        | (M) Status
-        | (C) Number of Remaining Sub-operations
-        | (C) Number of Completed Sub-operations
-        | (C) Number of Failed Sub-operations
-        | (C) Number of Warning Sub-operations
+        (U) Message ID
+        (M) Message ID Being Responded To
+        (U) Affected SOP Class UID
+        (U) Identifier
+        (M) Status
+        (C) Number of Remaining Sub-operations
+        (C) Number of Completed Sub-operations
+        (C) Number of Failed Sub-operations
+        (C) Number of Warning Sub-operations
 
         Parameters
         ----------
-        msg : dimse_messages.C_MOVE_RSP
+        msg : pynetdicom3.dimse_messages.C_MOVE_RSP
             The C-MOVE-RSP message to be sent.
+
+        TODO: Add in the extra status related elements if present
         """
         cs = msg.command_set
 
@@ -776,7 +798,7 @@ class DIMSEServiceProvider(object):
         else:
             s.append('Affected SOP Class UID        : none')
         s.append('Identifier                    : {0!s}'.format(identifier))
-        s.append('Status                        : 0x{0:04x}'.format(cs.Status))
+        s.append('DIMSE Status                  : 0x{0:04x}'.format(cs.Status))
 
         s.append('======================= END DIMSE MESSAGE ==================='
                  '====')
@@ -792,7 +814,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.C_CANCEL_RQ
+        msg : pynetdicom3.dimse_messages.C_CANCEL_RQ
             The C-CANCEL-\*-RQ message to be sent.
         """
         pass
@@ -803,12 +825,12 @@ class DIMSEServiceProvider(object):
 
         **C-ECHO Request Parameters**
 
-        | (M) Message ID
-        | (M) Affected SOP Class UID
+        (M) Message ID
+        (M) Affected SOP Class UID
 
         Parameters
         ----------
-        msg : dimse_messagesC_ECHO_RQ
+        msg : pynetdicom3.DIMSEmessage.C_ECHO_RQ
             The received C-ECHO-RQ message.
         """
         cs = msg.command_set
@@ -834,14 +856,14 @@ class DIMSEServiceProvider(object):
 
         **C-ECHO Response Parameters**
 
-        | (U) Message ID
-        | (M) Message ID Being Responded To
-        | (U) Affected SOP Class UID
-        | (M) Status
+        (U) Message ID
+        (M) Message ID Being Responded To
+        (U) Affected SOP Class UID
+        (M) Status
 
         Parameters
         ----------
-        msg : dimse_messages.C_ECHO_RSP
+        msg : pynetdicom3.dimse_messages.C_ECHO_RSP
             The received C-ECHO-RSP message.
         """
         cs = msg.command_set
@@ -863,17 +885,17 @@ class DIMSEServiceProvider(object):
 
         **C-STORE Request Elements**
 
-        | (M) Message ID
-        | (M) Affected SOP Class UID
-        | (M) Affected SOP Instance UID
-        | (M) Priority
-        | (U) Move Originator Application Entity Title
-        | (U) Move Originator Message ID
-        | (M) Data Set
+        (M) Message ID
+        (M) Affected SOP Class UID
+        (M) Affected SOP Instance UID
+        (M) Priority
+        (U) Move Originator Application Entity Title
+        (U) Move Originator Message ID
+        (M) Data Set
 
         Parameters
         ----------
-        msg : dimse_messagesC_STORE_RQ
+        msg : pynetdicom3.DIMSEmessage.C_STORE_RQ
             The received C-STORE-RQ message.
         """
         cs = msg.command_set
@@ -884,7 +906,7 @@ class DIMSEServiceProvider(object):
         priority = priority_str[cs.Priority]
 
         dataset = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
+        if msg.data_set.getvalue() != b'':
             dataset = 'Present'
 
         LOGGER.info('Received Store Request')
@@ -915,30 +937,30 @@ class DIMSEServiceProvider(object):
 
         **C-STORE Response Elements**
 
-        | (U) Message ID
-        | (M) Message ID Being Responded To
-        | (U) Affected SOP Class UID
-        | (U) Affected SOP Instance UID
-        | (M) Status
+        (U) Message ID
+        (M) Message ID Being Responded To
+        (U) Affected SOP Class UID
+        (U) Affected SOP Instance UID
+        (M) Status
 
         Parameters
         ----------
-        msg : dimse_messagesC_STORE_RSP
+        msg : pynetdicom3.DIMSEmessage.C_STORE_RSP
             The received C-STORE-RSP message.
         """
         cs = msg.command_set
 
         dataset = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
+        if msg.data_set.getvalue() != b'':
             dataset = 'Present'
 
         # See PS3.4 Annex B.2.3 for Storage Service Class Statuses
         status_str = '0x{0:04x} - Unknown'.format(cs.Status)
         # Try and get the status from the affected SOP class UID
         if 'AffectedSOPClassUID' in cs:
-            service_class = uid_to_service_class(cs.AffectedSOPClassUID)
-            if cs.Status in service_class.statuses:
-                status = service_class.statuses[cs.Status]
+            sop_class = uid_to_sop_class(cs.AffectedSOPClassUID)
+            if cs.Status in sop_class.statuses:
+                status = sop_class.statuses[cs.Status]
                 status_str = '0x{0:04x} - {1}'.format(cs.Status, status[0])
 
         LOGGER.info('Received Store Response')
@@ -970,14 +992,14 @@ class DIMSEServiceProvider(object):
 
         **C-FIND Request Parameters**
 
-        | (M) Message ID
-        | (M) Affected SOP Class UID
-        | (M) Priority
-        | (M) Identifier
+        (M) Message ID
+        (M) Affected SOP Class UID
+        (M) Priority
+        (M) Identifier
 
         Parameters
         ----------
-        msg : dimse_messagesC_FIND_RQ
+        msg : pynetdicom3.DIMSEmessage.C_FIND_RQ
             The received C-FIND-RQ message.
         """
         cs = msg.command_set
@@ -988,7 +1010,7 @@ class DIMSEServiceProvider(object):
         priority = priority_str[cs.Priority]
 
         dataset = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
+        if msg.data_set.getvalue() != b'':
             dataset = 'Present'
 
         s = []
@@ -1013,15 +1035,15 @@ class DIMSEServiceProvider(object):
 
         **C-FIND Response Parameters**
 
-        | (U) Message ID
-        | (M) Message ID Being Responded To
-        | (U) Affected SOP Class UID
-        | (C) Identifier
-        | (M) Status
+        (U) Message ID
+        (M) Message ID Being Responded To
+        (U) Affected SOP Class UID
+        (C) Identifier
+        (M) Status
 
         Parameters
         ----------
-        msg : dimse_messages.C_FIND_RSP
+        msg : pynetdicom3.dimse_messages.C_FIND_RSP
             The received C-FIND-RSP message.
         """
         cs = msg.command_set
@@ -1029,7 +1051,7 @@ class DIMSEServiceProvider(object):
             return
 
         dataset = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
+        if msg.data_set.getvalue() != b'':
             dataset = 'Present'
 
         s = []
@@ -1058,7 +1080,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messagesC_CANCEL_RQ
+        msg : pynetdicom3.DIMSEmessage.C_CANCEL_RQ
             The received C-CANCEL-RQ message.
         """
         cs = msg.command_set
@@ -1082,14 +1104,14 @@ class DIMSEServiceProvider(object):
 
         **C-GET Request Parameters**
 
-        | (M) Message ID
-        | (M) Affected SOP Class UID
-        | (M) Priority
-        | (M) Identifier
+        (M) Message ID
+        (M) Affected SOP Class UID
+        (M) Priority
+        (M) Identifier
 
         Parameters
         ----------
-        msg : dimse_messagesC_GET_RQ
+        msg : pynetdicom3.DIMSEmessage.C_GET_RQ
             The received C-GET-RQ message.
         """
         cs = msg.command_set
@@ -1100,7 +1122,7 @@ class DIMSEServiceProvider(object):
         priority = priority_str[cs.Priority]
 
         dataset = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
+        if msg.data_set.getvalue() != b'':
             dataset = 'Present'
 
         s = []
@@ -1125,25 +1147,27 @@ class DIMSEServiceProvider(object):
 
         **C-GET Response Parameters**
 
-        | (U) Message ID
-        | (M) Message ID Being Responded To
-        | (U) Affected SOP Class UID
-        | (U) Identifier
-        | (M) Status
-        | (C) Number of Remaining Sub-operations
-        | (C) Number of Completed Sub-operations
-        | (C) Number of Failed Sub-operations
-        | (C) Number of Warning Sub-operations
+        (U) Message ID
+        (M) Message ID Being Responded To
+        (U) Affected SOP Class UID
+        (U) Identifier
+        (M) Status
+        (C) Number of Remaining Sub-operations
+        (C) Number of Completed Sub-operations
+        (C) Number of Failed Sub-operations
+        (C) Number of Warning Sub-operations
 
         Parameters
         ----------
-        msg : dimse_messagesC_GET_RSP
+        msg : pynetdicom3.DIMSEmessage.C_GET_RSP
             The received C-GET-RSP message.
+
+        TODO: Add in the extra status related elements if present
         """
         cs = msg.command_set
 
         dataset = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
+        if msg.data_set.getvalue() != b'':
             dataset = 'Present'
 
         s = []
@@ -1183,15 +1207,15 @@ class DIMSEServiceProvider(object):
 
         **C-MOVE Request Parameters**
 
-        | (M) Message ID
-        | (M) Affected SOP Class UID
-        | (M) Priority
-        | (M) Move Destination
-        | (M) Identifier
+        (M) Message ID
+        (M) Affected SOP Class UID
+        (M) Priority
+        (M) Move Destination
+        (M) Identifier
 
         Parameters
         ----------
-        msg : dimse_messagesC_MOVE_RQ
+        msg : pynetdicom3.DIMSEmessage.C_MOVE_RQ
             The received C-MOVE-RQ message.
         """
         pass
@@ -1202,19 +1226,19 @@ class DIMSEServiceProvider(object):
 
         **C-MOVE Response Parameters**
 
-        | (U) Message ID
-        | (M) Message ID Being Responded To
-        | (U) Affected SOP Class UID
-        | (U) Identifier
-        | (M) Status
-        | (C) Number of Remaining Sub-operations
-        | (C) Number of Completed Sub-operations
-        | (C) Number of Failed Sub-operations
-        | (C) Number of Warning Sub-operations
+        (U) Message ID
+        (M) Message ID Being Responded To
+        (U) Affected SOP Class UID
+        (U) Identifier
+        (M) Status
+        (C) Number of Remaining Sub-operations
+        (C) Number of Completed Sub-operations
+        (C) Number of Failed Sub-operations
+        (C) Number of Warning Sub-operations
 
         Parameters
         ----------
-        msg : dimse_messagesC_MOVE_RSP
+        msg : pynetdicom3.DIMSEmessage.C_MOVE_RSP
             The received C-MOVE-RSP message.
         """
         cs = msg.command_set
@@ -1259,7 +1283,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_EVENT_REPORT_RQ
+        msg : pynetdicom3.dimse_messages.N_EVENT_REPORT_RQ
             The N-EVENT-REPORT-RQ message to be sent.
         """
         pass
@@ -1270,7 +1294,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_EVENT_REPORT_RSP
+        msg : pynetdicom3.dimse_messages.N_EVENT_REPORT_RSP
             The N-EVENT-REPORT-RSP message to be sent.
         """
         pass
@@ -1281,33 +1305,10 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_GET_RQ
+        msg : pynetdicom3.dimse_messages.N_GET_RQ
             The N-GET-RQ message to be sent.
         """
-        cs = msg.command_set
-
-        nr_attr = 'no identifiers'
-        if 'AttributeIdentifierList' in cs:
-            nr_attr = len(cs.AttributeIdentifierList)
-            if nr_attr == 1:
-                nr_attr = '{} identifier'.format(nr_attr)
-            else:
-                nr_attr = '{} identifiers'.format(nr_attr)
-
-        s = []
-        s.append('===================== OUTGOING DIMSE MESSAGE ================'
-                 '====')
-        s.append('Message Type                  : {0!s}'.format('N-GET RQ'))
-        s.append('Message ID                    : {0!s}'.format(cs.MessageID))
-        s.append('Requested SOP Class UID       : {0!s}'
-                 .format(cs.RequestedSOPClassUID))
-        s.append('Requested SOP Instance UID    : {0!s}'
-                 .format(cs.RequestedSOPInstanceUID))
-        s.append('Attribute Identifier List     : ({0!s})'.format(nr_attr))
-        s.append('======================= END DIMSE MESSAGE ==================='
-                 '====')
-        for line in s:
-            LOGGER.debug(line)
+        pass
 
     @staticmethod
     def debug_send_n_get_rsp(msg):
@@ -1315,33 +1316,10 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_GET_RSP
+        msg : pynetdicom3.dimse_messages.N_GET_RSP
             The N-GET-RSP message to be sent.
         """
-        cs = msg.command_set
-
-        attribute_list = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
-            attribute_list = 'Present'
-
-        s = []
-        s.append('===================== OUTGOING DIMSE MESSAGE ================'
-                 '====')
-        s.append('Message Type                  : {0!s}'.format('N-GET RQ'))
-        s.append('Message ID Being Responded To : {0!s}'
-                 .format(cs.MessageIDBeingRespondedTo))
-        if 'AffectedSOPClassUID' in cs:
-            s.append('Affected SOP Class UID        : {0!s}'
-                     .format(cs.AffectedSOPClassUID))
-        if 'AffectedSOPInstanceUID' in cs:
-            s.append('Affected SOP Instance UID     : {0!s}'
-                     .format(cs.AffectedSOPInstanceUID))
-        s.append('Attribute List                : {0!s}'.format(attribute_list))
-        s.append('Status                        : 0x{0:04x}'.format(cs.Status))
-        s.append('======================= END DIMSE MESSAGE ==================='
-                 '====')
-        for line in s:
-            LOGGER.debug(line)
+        pass
 
     @staticmethod
     def debug_send_n_set_rq(msg):
@@ -1349,7 +1327,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_SET_RQ
+        msg : pynetdicom3.dimse_messages.N_SET_RQ
             The N-SET-RQ message to be sent.
         """
         pass
@@ -1360,7 +1338,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_SET_RSP
+        msg : pynetdicom3.dimse_messages.N_SET_RSP
             The N-SET-RSP message to be sent.
         """
         pass
@@ -1371,7 +1349,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_ACTION_RQ
+        msg : pynetdicom3.dimse_messages.N_ACTION_RQ
             The N-ACTION-RQ message to be sent.
         """
         pass
@@ -1382,7 +1360,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_ACTION_RSP
+        msg : pynetdicom3.dimse_messages.N_ACTION_RSP
             The N-ACTION-RSP message to be sent.
         """
         pass
@@ -1393,7 +1371,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_CREATE_RQ
+        msg : pynetdicom3.dimse_messages.N_CREATE_RQ
             The N-CREATE-RQ message to be sent.
         """
         pass
@@ -1404,7 +1382,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_CREATE_RSP
+        msg : pynetdicom3.dimse_messages.N_CREATE_RSP
             The N-CREATE-RSP message to be sent.
         """
         pass
@@ -1415,7 +1393,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_DELETE_RQ
+        msg : pynetdicom3.dimse_messages.N_DELETE_RQ
             The N-DELETE-RQ message to be sent.
         """
         pass
@@ -1426,7 +1404,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_DELETE_RSP
+        msg : pynetdicom3.dimse_messages.N_DELETE_RSP
             The N-DELETE-RSP message to be sent.
         """
         pass
@@ -1437,7 +1415,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_EVENT_REPORT_RQ
+        msg : pynetdicom3.dimse_messages.N_EVENT_REPORT_RQ
             The received N-EVENT-REPORT-RQ message.
         """
         pass
@@ -1448,7 +1426,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_EVENT_REPORT_RSP
+        msg : pynetdicom3.dimse_messages.N_EVENT_REPORT_RSP
             The received N-EVENT-REPORT-RSP message.
         """
         pass
@@ -1459,7 +1437,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_GET_RQ
+        msg : pynetdicom3.dimse_messages.N_GET_RQ
             The received N-GET-RQ message.
         """
         pass
@@ -1470,36 +1448,10 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_GET_RSP
+        msg : pynetdicom3.dimse_messages.N_GET_RSP
             The received N-GET-RSP message.
         """
-        cs = msg.command_set
-
-        dataset = 'None'
-        if msg.data_set and msg.data_set.getvalue() != b'':
-            dataset = 'Present'
-
-        LOGGER.info('Received Get Response')
-        s = []
-        s.append('===================== INCOMING DIMSE MESSAGE ================'
-                 '====')
-        s.append('Message Type                  : {0!s}'.format('N-GET RSP'))
-        s.append('Presentation Context ID       : {0!s}'.format(msg.ID))
-        s.append('Message ID Being Responded To : {0!s}'
-                 .format(cs.MessageIDBeingRespondedTo))
-        if 'AffectedSOPClassUID' in cs:
-            s.append('Affected SOP Class UID        : {0!s}'
-                     .format(cs.AffectedSOPClassUID))
-        if 'AffectedSOPInstanceUID' in cs:
-            s.append('Affected SOP Instance UID     : {0!s}'
-                     .format(cs.AffectedSOPInstanceUID))
-        s.append('Attribute List                : {0!s}'.format(dataset))
-        s.append('Status                        : 0x{0:04x}'.format(cs.Status))
-        s.append('======================= END DIMSE MESSAGE ==================='
-                 '====')
-
-        for line in s:
-            LOGGER.debug(line)
+        pass
 
     @staticmethod
     def debug_receive_n_set_rq(msg):
@@ -1507,7 +1459,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_SET_RQ
+        msg : pynetdicom3.dimse_messages.N_SET_RQ
             The received N-SET-RQ message.
         """
         pass
@@ -1518,7 +1470,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_SET_RSP
+        msg : pynetdicom3.dimse_messages.N_SET_RSP
             The received N-SET-RSP message.
         """
         pass
@@ -1529,7 +1481,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_ACTION_RQ
+        msg : pynetdicom3.dimse_messages.N_ACTION_RQ
             The received N-ACTION-RQ message.
         """
         pass
@@ -1540,7 +1492,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_ACTION_RSP
+        msg : pynetdicom3.dimse_messages.N_ACTION_RSP
             The received N-ACTION-RSP message.
         """
         pass
@@ -1551,7 +1503,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_CREATE_RQ
+        msg : pynetdicom3.dimse_messages.N_CREATE_RQ
             The received N-CREATE-RQ message.
         """
         pass
@@ -1562,7 +1514,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_CREATE_RSP
+        msg : pynetdicom3.dimse_messages.N_CREATE_RSP
             The received N-CREATE-RSP message.
         """
         pass
@@ -1573,7 +1525,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_DELETE_RQ
+        msg : pynetdicom3.dimse_messages.N_DELETE_RQ
             The received N-DELETE-RQ message.
         """
         pass
@@ -1584,7 +1536,7 @@ class DIMSEServiceProvider(object):
 
         Parameters
         ----------
-        msg : dimse_messages.N_DELETE_RSP
+        msg : pynetdicom3.dimse_messages.N_DELETE_RSP
             The received N-DELETE-RSP message.
         """
         pass

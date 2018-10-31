@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-"""An implementation of a Storage Service Class Provider (Storage SCP)."""
+
+"""
+    A dcmtk style storescp application.
+
+    Used as a SCP for sending DICOM objects to
+"""
 
 import argparse
 import logging
@@ -7,22 +12,13 @@ import os
 import socket
 import sys
 
-from pydicom.dataset import Dataset
-from pydicom.uid import (
-    ExplicitVRLittleEndian,
-    ImplicitVRLittleEndian,
-    ExplicitVRBigEndian,
-    DeflatedExplicitVRLittleEndian
-)
+from pydicom.dataset import Dataset, FileDataset
+from pydicom.filewriter import write_file
+from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
+    ExplicitVRBigEndian, DeflatedExplicitVRLittleEndian
 
-from pynetdicom3 import (
-    AE,
-    StoragePresentationContexts,
-    VerificationPresentationContexts,
-    PYNETDICOM_IMPLEMENTATION_UID,
-    PYNETDICOM_IMPLEMENTATION_VERSION
-)
-
+from pynetdicom3 import AE, StorageSOPClassList, VerificationSOPClass
+from pynetdicom3 import pynetdicom_uid_prefix
 
 def setup_logger():
     """Setup the logger"""
@@ -35,10 +31,7 @@ def setup_logger():
 
     return logger
 
-
 LOGGER = setup_logger()
-VERSION = '0.3.3'
-
 
 def _setup_argparser():
     """Setup the command line arguments"""
@@ -55,10 +48,6 @@ def _setup_argparser():
     req_opts.add_argument("port",
                           help="TCP/IP port number to listen on",
                           type=int)
-    req_opts.add_argument("--bind_addr",
-                          help="The IP address of the network interface to "
-                          "listen on. If unset, listen on all interfaces.",
-                          default='')
 
     # General Options
     gen_opts = parser.add_argument_group('General Options')
@@ -88,7 +77,7 @@ def _setup_argparser():
     net_opts.add_argument("-ta", "--acse-timeout", metavar='[s]econds',
                           help="timeout for ACSE messages",
                           type=int,
-                          default=30)
+                          default=60)
     net_opts.add_argument("-td", "--dimse-timeout", metavar='[s]econds',
                           help="timeout for DIMSE messages",
                           type=int,
@@ -150,20 +139,17 @@ def _setup_argparser():
 
     return parser.parse_args()
 
-
 args = _setup_argparser()
 
 if args.verbose:
     LOGGER.setLevel(logging.INFO)
-    pynetdicom_logger = logging.getLogger('pynetdicom3')
-    pynetdicom_logger.setLevel(logging.INFO)
 
 if args.debug:
     LOGGER.setLevel(logging.DEBUG)
     pynetdicom_logger = logging.getLogger('pynetdicom3')
     pynetdicom_logger.setLevel(logging.DEBUG)
 
-LOGGER.debug('$storescp.py v{0!s}'.format(VERSION))
+LOGGER.debug('$storescp.py v{0!s} {1!s} $'.format('0.2.0', '2016-03-23'))
 LOGGER.debug('')
 
 # Validate port
@@ -183,97 +169,78 @@ transfer_syntax = [ImplicitVRLittleEndian,
                    ExplicitVRBigEndian]
 
 if args.prefer_uncompr and ImplicitVRLittleEndian in transfer_syntax:
-    transfer_syntax.remove(ImplicitVRLittleEndian)
-    transfer_syntax.append(ImplicitVRLittleEndian)
+        transfer_syntax.remove(ImplicitVRLittleEndian)
+        transfer_syntax.append(ImplicitVRLittleEndian)
 
 if args.implicit:
     transfer_syntax = [ImplicitVRLittleEndian]
 
 if args.prefer_little and ExplicitVRLittleEndian in transfer_syntax:
-    transfer_syntax.remove(ExplicitVRLittleEndian)
-    transfer_syntax.insert(0, ExplicitVRLittleEndian)
+        transfer_syntax.remove(ExplicitVRLittleEndian)
+        transfer_syntax.insert(0, ExplicitVRLittleEndian)
 
 if args.prefer_big and ExplicitVRBigEndian in transfer_syntax:
-    transfer_syntax.remove(ExplicitVRBigEndian)
-    transfer_syntax.insert(0, ExplicitVRBigEndian)
+        transfer_syntax.remove(ExplicitVRBigEndian)
+        transfer_syntax.insert(0, ExplicitVRBigEndian)
 
-
-def on_c_store(ds, context, info):
-    """Store the pydicom Dataset `ds` in the DICOM File Format.
+def on_c_store(dataset):
+    """
+    Write `dataset` to file as little endian implicit VR
 
     Parameters
     ----------
-    ds : pydicom.Dataset
-        The DICOM dataset sent in the C-STORE request.
-    context : pynetdicom3.presentation.PresentationContextTuple
-        Details of the presentation context the dataset was sent under.
-    info : dict
-        A dict containing information about the association and DIMSE message.
+    dataset : pydicom.dataset.Dataset
+        The DICOM dataset sent via the C-STORE
 
     Returns
     -------
-    status : pynetdicom.sop_class.Status or int
-        A valid return status code, see PS3.4 Annex B.2.3 or the
-        StorageServiceClass implementation for the available statuses
+    status : pydicom.dataset.Dataset
+        A Dataset containing a Status element with a value valid for the
+        Storage Service Class (see PS3.4 annex B.2.3). The dataset may also
+        contain optional elements related to the Status (see PS3.7 Annex C).
     """
-    mode_prefixes = {
-        'CT Image Storage' : 'CT',
-        'Enhanced CT Image Storage' : 'CTE',
-        'MR Image Storage' : 'MR',
-        'Enhanced MR Image Storage' : 'MRE',
-        'Positron Emission Tomography Image Storage' : 'PT',
-        'Enhanced PET Image Storage' : 'PTE',
-        'RT Image Storage' : 'RI',
-        'RT Dose Storage' : 'RD',
-        'RT Plan Storage' : 'RP',
-        'RT Structure Set Storage' : 'RS',
-        'Computed Radiography Image Storage' : 'CR',
-        'Ultrasound Image Storage' : 'US',
-        'Enhanced Ultrasound Image Storage' : 'USE',
-        'X-Ray Angiographic Image Storage' : 'XA',
-        'Enhanced XA Image Storage' : 'XAE',
-        'Nuclear Medicine Image Storage' : 'NM',
-        'Secondary Capture Image Storage' : 'SC'
-    }
+    mode_prefix = 'UN'
+    mode_prefixes = {'CT Image Storage' : 'CT',
+                     'Enhanced CT Image Storage' : 'CTE',
+                     'MR Image Storage' : 'MR',
+                     'Enhanced MR Image Storage' : 'MRE',
+                     'Positron Emission Tomography Image Storage' : 'PT',
+                     'Enhanced PET Image Storage' : 'PTE',
+                     'RT Image Storage' : 'RI',
+                     'RT Dose Storage' : 'RD',
+                     'RT Plan Storage' : 'RP',
+                     'RT Structure Set Storage' : 'RS',
+                     'Computed Radiography Image Storage' : 'CR',
+                     'Ultrasound Image Storage' : 'US',
+                     'Enhanced Ultrasound Image Storage' : 'USE',
+                     'X-Ray Angiographic Image Storage' : 'XA',
+                     'Enhanced XA Image Storage' : 'XAE',
+                     'Nuclear Medicine Image Storage' : 'NM',
+                     'Secondary Capture Image Storage' : 'SC'}
 
     try:
-        mode_prefix = mode_prefixes[ds.SOPClassUID.name]
-    except KeyError:
-        mode_prefix = 'UN'
+        mode_prefix = mode_prefixes[dataset.SOPClassUID.__str__()]
+    except:
+        pass
 
-    filename = '{0!s}.{1!s}'.format(mode_prefix, ds.SOPInstanceUID)
+    filename = '{0!s}.{1!s}'.format(mode_prefix, dataset.SOPInstanceUID)
     LOGGER.info('Storing DICOM file: {0!s}'.format(filename))
 
     if os.path.exists(filename):
         LOGGER.warning('DICOM file already exists, overwriting')
 
-    ## DICOM File Format - File Meta Information Header
-    # If a DICOM dataset is to be stored in the DICOM File Format then the
-    # File Meta Information Header is required. At a minimum it requires:
-    #   * (0002,0000) FileMetaInformationGroupLength, UL, 4
-    #   * (0002,0001) FileMetaInformationVersion, OB, 2
-    #   * (0002,0002) MediaStorageSOPClassUID, UI, N
-    #   * (0002,0003) MediaStorageSOPInstanceUID, UI, N
-    #   * (0002,0010) TransferSyntaxUID, UI, N
-    #   * (0002,0012) ImplementationClassUID, UI, N
-    # (from the DICOM Standard, Part 10, Section 7.1)
-    # Of these, we should update the following as pydicom will take care of
-    #   the remainder
     meta = Dataset()
-    meta.MediaStorageSOPClassUID = ds.SOPClassUID
-    meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
-    meta.ImplementationClassUID = PYNETDICOM_IMPLEMENTATION_UID
-    meta.TransferSyntaxUID = context.transfer_syntax
+    meta.MediaStorageSOPClassUID = dataset.SOPClassUID
+    meta.MediaStorageSOPInstanceUID = dataset.SOPInstanceUID
+    meta.ImplementationClassUID = pynetdicom_uid_prefix
 
-    # The following is not mandatory, set for convenience
-    meta.ImplementationVersionName = PYNETDICOM_IMPLEMENTATION_VERSION
+    ds = FileDataset(filename, {}, file_meta=meta, preamble=b"\0" * 128)
+    ds.update(dataset)
 
-    ds.file_meta = meta
-    ds.is_little_endian = context.transfer_syntax.is_little_endian
-    ds.is_implicit_VR = context.transfer_syntax.is_implicit_VR
+    ds.is_little_endian = True
+    ds.is_implicit_VR = True
 
     status_ds = Dataset()
-    status_ds.Status = 0x0000
 
     if not args.ignore:
         # Try to save to output-directory
@@ -281,15 +248,13 @@ def on_c_store(ds, context, info):
             filename = os.path.join(args.output_directory, filename)
 
         try:
-            # We use `write_like_original=False` to ensure that a compliant
-            #   File Meta Information Header is written
-            ds.save_as(filename, write_like_original=False)
+            ds.save_as(filename)
             status_ds.Status = 0x0000 # Success
         except IOError:
             LOGGER.error('Could not write file to specified directory:')
             LOGGER.error("    {0!s}".format(os.path.dirname(filename)))
             LOGGER.error('Directory may not exist or you may not have write '
-                         'permission')
+                    'permission')
             # Failed - Out of Resources - IOError
             status_ds.Status = 0xA700
         except:
@@ -303,21 +268,19 @@ def on_c_store(ds, context, info):
 # Test output-directory
 if args.output_directory is not None:
     if not os.access(args.output_directory, os.W_OK|os.X_OK):
-        LOGGER.error('No write permissions or the output '
-                     'directory may not exist:')
+        LOGGER.error("No write permissions or the output directory may not exist:")
         LOGGER.error("    {0!s}".format(args.output_directory))
         sys.exit()
 
+scp_classes = [x for x in StorageSOPClassList]
+scp_classes.append(VerificationSOPClass)
+
 # Create application entity
-ae = AE(ae_title=args.aetitle, port=args.port)
-
-ae.bind_addr = args.bind_addr
-
-# Add presentation contexts with specified transfer syntaxes
-for context in StoragePresentationContexts:
-    ae.add_supported_context(context.abstract_syntax, transfer_syntax)
-for context in VerificationPresentationContexts:
-    ae.add_supported_context(context.abstract_syntax, transfer_syntax)
+ae = AE(ae_title=args.aetitle,
+        port=args.port,
+        scu_sop_class=[],
+        scp_sop_class=scp_classes,
+        transfer_syntax=transfer_syntax)
 
 ae.maximum_pdu_size = args.max_pdu
 

@@ -24,7 +24,6 @@ from pynetdicom3.dimse_primitives import (
 )
 from pynetdicom3.dsutils import encode
 from .encoded_dimse_msg import c_store_ds
-from .encoded_dimse_n_msg import n_get_rsp_ds
 
 LOGGER = logging.getLogger('pynetdicom3')
 LOGGER.setLevel(logging.CRITICAL)
@@ -526,28 +525,13 @@ class TestDIMSEProviderCallbacks(unittest.TestCase):
         # N-GET-RQ
         primitive = N_GET()
         primitive.MessageID = 1
-        primitive.RequestedSOPClassUID = '1.1.1'
-        primitive.RequestedSOPInstanceUID = '1.1.1.1'
-        self.dimse.send_msg(primitive, 1)
-
-        # Plus user defined
-        primitive.AttributeIdentifierList = [(0x0000, 0x0000), (0xffff, 0xffff)]
+        primitive.AffectedSOPClassUID = '1.1.1'
         self.dimse.send_msg(primitive, 1)
 
         # N-GET-RSP
-        # Mandatory elements
         primitive = N_GET()
         primitive.MessageIDBeingRespondedTo = 1
         primitive.Status = 0x0000
-        self.dimse.send_msg(primitive, 1)
-
-        # User defined
-        primitive.AffectedSOPClassUID = '1.1.1'
-        primitive.AffectedSOPInstanceUID = '1.1.1.1'
-        self.dimse.send_msg(primitive, 1)
-
-        # Conditional
-        primitive.AttributeList = BytesIO(n_get_rsp_ds)
         self.dimse.send_msg(primitive, 1)
 
     def test_callback_send_n_set(self):

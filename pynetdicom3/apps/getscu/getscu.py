@@ -12,29 +12,20 @@ import sys
 import time
 
 from pydicom.dataset import Dataset, FileDataset
-from pydicom.uid import (
-    ExplicitVRLittleEndian, ImplicitVRLittleEndian, ExplicitVRBigEndian
-)
+from pydicom.filewriter import write_file
+from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
+                        ExplicitVRBigEndian, UID
 
-from pynetdicom3 import (
-    AE,
-    StoragePresentationContexts,
-    QueryRetrievePresentationContexts,
-    PYNETDICOM_IMPLEMENTATION_UID,
-    PYNETDICOM_IMPLEMENTATION_VERSION
-)
+from pynetdicom3 import AE, StorageSOPClassList, QueryRetrieveSOPClassList
+from pynetdicom3 import pynetdicom_uid_prefix
 from pynetdicom3.pdu_primitives import SCP_SCU_RoleSelectionNegotiation
 
-LOGGER = logging.Logger('getscu')
+logger = logging.Logger('getscu')
 stream_logger = logging.StreamHandler()
 formatter = logging.Formatter('%(levelname).1s: %(message)s')
 stream_logger.setFormatter(formatter)
-LOGGER.addHandler(stream_logger)
-LOGGER.setLevel(logging.ERROR)
-
-
-VERSION = '0.2.2'
-
+logger.addHandler(stream_logger)
+logger.setLevel(logging.ERROR)
 
 def _setup_argparser():
     """Setup the command line arguments"""
@@ -103,54 +94,48 @@ def _setup_argparser():
                           help="use patient/study only information model",
                           action="store_true")
 
-    # Output Options
-    out_opts = parser.add_argument_group('Output Options')
-    out_opts.add_argument('-od', "--output-directory", metavar="[d]irectory",
-                          help="write received objects to existing directory d",
-                          type=str)
-
-    # Miscellaneous
-    misc_opts = parser.add_argument_group('Miscellaneous')
-    misc_opts.add_argument('--ignore',
-                           help="receive data but don't store it",
-                           action="store_true")
-
     return parser.parse_args()
 
 args = _setup_argparser()
 
 if args.verbose:
-    LOGGER.setLevel(logging.INFO)
+    logger.setLevel(logging.INFO)
     pynetdicom_logger = logging.getLogger('pynetdicom3')
     pynetdicom_logger.setLevel(logging.INFO)
 
 if args.debug:
-    LOGGER.setLevel(logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
     pynetdicom_logger = logging.getLogger('pynetdicom3')
     pynetdicom_logger.setLevel(logging.DEBUG)
 
-LOGGER.debug('$getscu.py v{0!s}'.format(VERSION))
-LOGGER.debug('')
+logger.debug('$getscu.py v{0!s} {1!s} $'.format('0.1.0', '2016-02-15'))
+logger.debug('')
 
+
+scu_classes = [x for x in QueryRetrieveSOPClassList]
+scu_classes.extend(StorageSOPClassList)
 
 # Create application entity
 # Binding to port 0 lets the OS pick an available port
-ae = AE(ae_title=args.calling_aet, port=0)
+ae = AE(ae_title=args.calling_aet,
+        port=0,
+        scu_sop_class=scu_classes,
+        scp_sop_class=[],
+        transfer_syntax=[ExplicitVRLittleEndian])
 
-for context in QueryRetrievePresentationContexts:
-    ae.add_requested_context(context.abstract_syntax)
-for context in StoragePresentationContexts:
-    ae.add_requested_context(context.abstract_syntax)
-
-# Add SCP/SCU Role Selection Negotiation to the extended negotiation
-# We want to act as a Storage SCP
+# Set the extended negotiation SCP/SCU role selection to allow us to receive
+#   C-STORE requests for the supported SOP classes
 ext_neg = []
-for context in StoragePresentationContexts:
-    role = SCP_SCU_RoleSelectionNegotiation()
-    role.sop_class_uid = context.abstract_syntax
-    role.scp_role = True
-    role.scu_role = False
-    ext_neg.append(role)
+for context in ae.presentation_contexts_scu:
+    tmp = SCP_SCU_RoleSelectionNegotiation()
+    tmp.sop_class_uid = context.AbstractSyntax
+    tmp.scu_role = False
+    tmp.scp_role = True
+
+    ext_neg.append(tmp)
+
+# Request association with remote
+assoc = ae.associate(args.peer, args.port, args.called_aet, ext_neg=ext_neg)
 
 # Create query dataset
 d = Dataset()
@@ -168,19 +153,15 @@ elif args.psonly:
 else:
     query_model = 'W'
 
-def on_c_store(dataset, context, info):
+def on_c_store(dataset):
     """
     Function replacing ApplicationEntity.on_store(). Called when a dataset is
     received following a C-STORE. Write the received dataset to file
 
     Parameters
     ----------
-    dataset : pydicom.Dataset
+    dataset - pydicom.Dataset
         The DICOM dataset sent via the C-STORE
-    context : pynetdicom3.presentation.PresentationContextTuple
-        Details of the presentation context the dataset was sent under.
-    info : dict
-        A dict containing information about the association and DIMSE message.
 
     Returns
     -------
@@ -208,83 +189,41 @@ def on_c_store(dataset, context, info):
                      'Secondary Capture Image Storage' : 'SC'}
 
     try:
-        mode_prefix = mode_prefixes[dataset.SOPClassUID.name]
-    except KeyError:
-        mode_prefix = 'UN'
+        mode_prefix = mode_prefixes[dataset.SOPClassUID.__str__()]
+    except:
+        pass
 
     filename = '{0!s}.{1!s}'.format(mode_prefix, dataset.SOPInstanceUID)
-    LOGGER.info('Storing DICOM file: {0!s}'.format(filename))
+    logger.info('Storing DICOM file: {0!s}'.format(filename))
 
     if os.path.exists(filename):
-        LOGGER.warning('DICOM file already exists, overwriting')
+        logger.warning('DICOM file already exists, overwriting')
 
-    ## DICOM File Format - File Meta Information Header
-    # If a DICOM dataset is to be stored in the DICOM File Format then the
-    # File Meta Information Header is required. At a minimum it requires:
-    #   * (0002,0000) FileMetaInformationGroupLength, UL, 4
-    #   * (0002,0001) FileMetaInformationVersion, OB, 2
-    #   * (0002,0002) MediaStorageSOPClassUID, UI, N
-    #   * (0002,0003) MediaStorageSOPInstanceUID, UI, N
-    #   * (0002,0010) TransferSyntaxUID, UI, N
-    #   * (0002,0012) ImplementationClassUID, UI, N
-    # (from the DICOM Standard, Part 10, Section 7.1)
-    # Of these, we should update the following as pydicom will take care of
-    #   the remainder
     meta = Dataset()
     meta.MediaStorageSOPClassUID = dataset.SOPClassUID
     meta.MediaStorageSOPInstanceUID = dataset.SOPInstanceUID
-    meta.ImplementationClassUID = PYNETDICOM_IMPLEMENTATION_UID
-    meta.TransferSyntaxUID = context.transfer_syntax
-
-    # The following is not mandatory, set for convenience
-    meta.ImplementationVersionName = PYNETDICOM_IMPLEMENTATION_VERSION
+    meta.ImplementationClassUID = pynetdicom_uid_prefix
 
     ds = FileDataset(filename, {}, file_meta=meta, preamble=b"\0" * 128)
     ds.update(dataset)
-    ds.is_little_endian = context.transfer_syntax.is_little_endian
-    ds.is_implicit_VR = context.transfer_syntax.is_implicit_VR
+    ds.is_little_endian = True
+    ds.is_implicit_VR = True
+    ds.save_as(filename)
 
-    status_ds = Dataset()
-    status_ds.Status = 0x0000
-
-    if not args.ignore:
-        # Try to save to output-directory
-        if args.output_directory is not None:
-            filename = os.path.join(args.output_directory, filename)
-
-        try:
-            # We use `write_like_original=False` to ensure that a compliant
-            #   File Meta Information Header is written
-            ds.save_as(filename, write_like_original=False)
-            status_ds.Status = 0x0000 # Success
-        except IOError:
-            LOGGER.error('Could not write file to specified directory:')
-            LOGGER.error("    {0!s}".format(os.path.dirname(filename)))
-            LOGGER.error('Directory may not exist or you may not have write '
-                    'permission')
-            # Failed - Out of Resources - IOError
-            status_ds.Status = 0xA700
-        except:
-            LOGGER.error('Could not write file to specified directory:')
-            LOGGER.error("    {0!s}".format(os.path.dirname(filename)))
-            # Failed - Out of Resources - Miscellaneous error
-            status_ds.Status = 0xA701
-
-    return status_ds
+    return 0x0000 # Success
 
 ae.on_c_store = on_c_store
-
-# Request association with remote
-assoc = ae.associate(args.peer,
-                     args.port,
-                     ae_title=args.called_aet,
-                     ext_neg=ext_neg)
 
 # Send query
 if assoc.is_established:
     response = assoc.send_c_get(d, query_model=query_model)
 
-    for status, identifier in response:
-        pass
+    time.sleep(1)
+    if response is not None:
+        for value in response:
+            pass
 
     assoc.release()
+
+# done
+ae.quit()

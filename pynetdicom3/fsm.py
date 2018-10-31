@@ -16,17 +16,14 @@ LOGGER = logging.getLogger('pynetdicom3.sm')
 class StateMachine(object):
     """Implementation of the DICOM Upper Layer State Machine.
 
+    Seer PS3.8 Section 9.2.
+
     Attributes
     ----------
     current_state : str
         The current state of the state machine, 'Sta1' to 'Sta13'.
     dul : pynetdicom3.dul.DULServiceProvider
         The DICOM Upper Layer service instance for the local AE
-
-    References
-    ----------
-
-    * DICOM Standard, Part 8, Section 9.2
     """
     def __init__(self, dul):
         """Create a new StateMachine.
@@ -112,10 +109,8 @@ def AE_1(dul):
 
     State-event triggers: Sta1 + Evt1
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
+        Related Actions"
 
     Parameters
     ----------
@@ -155,10 +150,8 @@ def AE_2(dul):
 
     Callbacks: ApplicationEntity.on_send_associate_rq(PDU)
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
+        Related Actions"
 
     Parameters
     ----------
@@ -172,12 +165,12 @@ def AE_2(dul):
     """
     # Send A-ASSOCIATE-RQ PDU
     dul.pdu = A_ASSOCIATE_RQ()
-    dul.pdu.from_primitive(dul.primitive)
+    dul.pdu.FromParams(dul.primitive)
 
     # Callback
     dul.assoc.acse.debug_send_associate_rq(dul.pdu)
 
-    bytestream = dul.pdu.encode()
+    bytestream = dul.pdu.Encode()
     dul.scu_socket.send(bytestream)
 
     return 'Sta5'
@@ -189,10 +182,8 @@ def AE_3(dul):
 
     State-event triggers: Sta5 + Evt3
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
+        Related Actions"
 
     Parameters
     ----------
@@ -217,10 +208,8 @@ def AE_4(dul):
 
     State-event triggers: Sta5 + Evt4
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
+        Related Actions"
 
     Parameters
     ----------
@@ -249,10 +238,8 @@ def AE_5(dul):
 
     State-event triggers: Sta1 + Evt5
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
+        Related Actions"
 
     Parameters
     ----------
@@ -277,19 +264,16 @@ def AE_6(dul):
 
     On receiving an A-ASSOCIATE-RQ PDU from the peer then stop the ARTIM timer
     and then either
+        * issue an A-ASSOCIATE indication primitive if the -RQ is acceptable or
+        * issue an A-ASSOCIATE-RJ PDU to the peer and start the ARTIM timer
 
-    * issue an A-ASSOCIATE indication primitive if the -RQ is acceptable or
-    * issue an A-ASSOCIATE-RJ PDU to the peer and start the ARTIM timer
-
-    This is a lower-level DUL Service Provider initiated rejection - for
-    example this could be where the protocol version is checked
+    This is a lower-level DUL Service Provider initiated rejection - for example
+        this could be where the protocol version is checked
 
     State-event triggers: Sta2 + Evt6
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
+        Related Actions"
 
     Parameters
     ----------
@@ -318,12 +302,12 @@ def AE_6(dul):
         dul.primitive.diagnostic = 0x02
 
         dul.pdu = A_ASSOCIATE_RJ()
-        dul.pdu.from_primitive(dul.primitive)
+        dul.pdu.FromParams(dul.primitive)
 
         # Callback
         dul.assoc.acse.debug_send_associate_rj(dul.pdu)
 
-        dul.scu_socket.send(dul.pdu.encode())
+        dul.scu_socket.send(dul.pdu.Encode())
 
         dul.artim_timer.start()
 
@@ -342,10 +326,8 @@ def AE_7(dul):
 
     State-event triggers: Sta3 + Evt7
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
+        Related Actions"
 
     Parameters
     ----------
@@ -359,12 +341,12 @@ def AE_7(dul):
     """
     # Send A-ASSOCIATE-AC PDU
     dul.pdu = A_ASSOCIATE_AC()
-    dul.pdu.from_primitive(dul.primitive)
+    dul.pdu.FromParams(dul.primitive)
 
     # Callback
     dul.assoc.acse.debug_send_associate_ac(dul.pdu)
 
-    bytestream = dul.pdu.encode()
+    bytestream = dul.pdu.Encode()
     dul.scu_socket.send(bytestream)
 
     return 'Sta6'
@@ -376,10 +358,8 @@ def AE_8(dul):
 
     State-event triggers: Sta3 + Evt8
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
+        Related Actions"
 
     Parameters
     ----------
@@ -393,12 +373,12 @@ def AE_8(dul):
     """
     # Send A-ASSOCIATE-RJ PDU and start ARTIM timer
     dul.pdu = A_ASSOCIATE_RJ()
-    dul.pdu.from_primitive(dul.primitive)
+    dul.pdu.FromParams(dul.primitive)
 
     # Callback
     dul.assoc.acse.debug_send_associate_rj(dul.pdu)
 
-    dul.scu_socket.send(dul.pdu.encode())
+    dul.scu_socket.send(dul.pdu.Encode())
 
     dul.artim_timer.start()
 
@@ -412,10 +392,8 @@ def DT_1(dul):
 
     State-event triggers: Sta6 + Evt9
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-7, "Data Transfer Related
+        Actions"
 
     Parameters
     ----------
@@ -429,13 +407,13 @@ def DT_1(dul):
     """
     # Send P-DATA-TF PDU
     dul.pdu = P_DATA_TF()
-    dul.pdu.from_primitive(dul.primitive)
+    dul.pdu.FromParams(dul.primitive)
     dul.primitive = None # Why this?
 
     # Callback
     dul.assoc.acse.debug_send_data_tf(dul.pdu)
 
-    bytestream = dul.pdu.encode()
+    bytestream = dul.pdu.Encode()
     dul.scu_socket.send(bytestream)
 
     return 'Sta6'
@@ -447,10 +425,8 @@ def DT_2(dul):
 
     State-event triggers: Sta6 + Evt10
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-7, "Data Transfer Related
+        Actions"
 
     Parameters
     ----------
@@ -475,10 +451,8 @@ def AR_1(dul):
 
     State-event triggers: Sta6 + Evt11
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-8, "Associate Release
+        Related Actions"
 
     Parameters
     ----------
@@ -492,12 +466,12 @@ def AR_1(dul):
     """
     # Send A-RELEASE-RQ PDU
     dul.pdu = A_RELEASE_RQ()
-    dul.pdu.from_primitive(dul.primitive)
+    dul.pdu.FromParams(dul.primitive)
 
     # Callback
     dul.assoc.acse.debug_send_release_rq(dul.pdu)
 
-    bytestream = dul.pdu.encode()
+    bytestream = dul.pdu.Encode()
     dul.scu_socket.send(bytestream)
 
     return 'Sta7'
@@ -509,10 +483,8 @@ def AR_2(dul):
 
     State-event triggers: Sta6 + Evt12
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-8, "Associate Release
+        Related Actions"
 
     Parameters
     ----------
@@ -537,10 +509,8 @@ def AR_3(dul):
 
     State-event triggers: Sta7 + Evt13, Sta11 + Evt13
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-8, "Associate Release
+        Related Actions"
 
     Parameters
     ----------
@@ -566,10 +536,8 @@ def AR_4(dul):
 
     State-event triggers: Sta8 + Evt14, Sta12 + Evt14
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-8, "Associate Release
+        Related Actions"
 
     Parameters
     ----------
@@ -583,12 +551,12 @@ def AR_4(dul):
     """
     # Issue A-RELEASE-RP PDU and start ARTIM timer
     dul.pdu = A_RELEASE_RP()
-    dul.pdu.from_primitive(dul.primitive)
+    dul.pdu.FromParams(dul.primitive)
 
     # Callback
     dul.assoc.acse.debug_send_release_rp(dul.pdu)
 
-    dul.scu_socket.send(dul.pdu.encode())
+    dul.scu_socket.send(dul.pdu.Encode())
     dul.artim_timer.start()
 
     return 'Sta13'
@@ -601,10 +569,8 @@ def AR_5(dul):
 
     State-event triggers: Sta13 + Evt17
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-8, "Associate Release
+        Related Actions"
 
     Parameters
     ----------
@@ -629,10 +595,8 @@ def AR_6(dul):
 
     State-event triggers: Sta7 + Evt10
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-8, "Associate Release
+        Related Actions"
 
     Parameters
     ----------
@@ -657,10 +621,8 @@ def AR_7(dul):
 
     State-event triggers: Sta8 + Evt9
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-8, "Associate Release
+        Related Actions"
 
     Parameters
     ----------
@@ -674,12 +636,12 @@ def AR_7(dul):
     """
     # Issue P-DATA-TF PDU
     dul.pdu = P_DATA_TF()
-    dul.pdu.from_primitive(dul.primitive)
+    dul.pdu.FromParams(dul.primitive)
 
     # Callback
     dul.assoc.acse.debug_send_data_tf(dul.pdu)
 
-    bytestream = dul.pdu.encode()
+    bytestream = dul.pdu.Encode()
     dul.scu_socket.send(bytestream)
 
     return 'Sta8'
@@ -692,10 +654,8 @@ def AR_8(dul):
 
     State-event triggers: Sta7 + Evt12
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-8, "Associate Release
+        Related Actions"
 
     Parameters
     ----------
@@ -721,10 +681,8 @@ def AR_9(dul):
 
     State-event triggers: Sta9 + Evt14
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-8, "Associate Release
+        Related Actions"
 
     Parameters
     ----------
@@ -738,12 +696,12 @@ def AR_9(dul):
     """
     # Send A-RELEASE-RP PDU
     dul.pdu = A_RELEASE_RP()
-    dul.pdu.from_primitive(dul.primitive)
+    dul.pdu.FromParams(dul.primitive)
 
     # Callback
     dul.assoc.acse.debug_send_release_rp(dul.pdu)
 
-    dul.scu_socket.send(dul.pdu.encode())
+    dul.scu_socket.send(dul.pdu.Encode())
 
     return 'Sta11'
 
@@ -754,10 +712,8 @@ def AR_10(dul):
 
     State-event triggers: Sta10 + Evt13
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-8, "Associate Release
+        Related Actions"
 
     Parameters
     ----------
@@ -784,10 +740,8 @@ def AA_1(dul):
     State-event triggers: Sta2 + Evt3/Evt4/Evt10/Evt12/Evt13/Evt19,
     Sta3/Sta5/Sta6/Sta7/Sta8/Sta9/Sta10/Sta11/Sta12 + Evt15
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-9, "Associate Abort Related
+    Actions"
 
     Parameters
     ----------
@@ -813,12 +767,12 @@ def AA_1(dul):
         # Reason not specified
         dul.pdu.reason_diagnostic = 0x00
 
-    dul.pdu.from_primitive(dul.primitive)
+    dul.pdu.FromParams(dul.primitive)
 
     # Callback
     dul.assoc.acse.debug_send_abort(dul.pdu)
 
-    dul.scu_socket.send(dul.pdu.encode())
+    dul.scu_socket.send(dul.pdu.Encode())
     dul.artim_timer.restart()
 
     return 'Sta13'
@@ -831,10 +785,8 @@ def AA_2(dul):
 
     State-event triggers: Sta2 + Evt16/Evt18, Sta4 + Evt15, Sta13 + Evt16/Evt18
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-9, "Associate Abort Related
+    Actions"
 
     Parameters
     ----------
@@ -862,10 +814,8 @@ def AA_3(dul):
     State-event triggers: Sta3/Sta5/Sta6/Sta7/Sta8/Sta9/Sta10/Sta11/Sta12 +
     Evt16
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-9, "Associate Abort Related
+    Actions"
 
     Parameters
     ----------
@@ -897,10 +847,8 @@ def AA_4(dul):
     State-event triggers: Sta3/Sta4/Sta5/Sta6/Sta7/Sta8/Sta9/Sta10/Sta11/Sta12
     + Evt17
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-9, "Associate Abort Related
+    Actions"
 
     Parameters
     ----------
@@ -926,10 +874,8 @@ def AA_5(dul):
 
     State-event triggers: Sta2 + Evt17
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-9, "Associate Abort Related
+    Actions"
 
     Parameters
     ----------
@@ -953,10 +899,8 @@ def AA_6(dul):
 
     State-event triggers: Sta13 + Evt3/Evt4/Evt10/Evt12/Evt13
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-9, "Associate Abort Related
+    Actions"
 
     Parameters
     ----------
@@ -981,10 +925,8 @@ def AA_7(dul):
 
     State-event triggers: Sta13 + Evt6/Evt19
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-9, "Associate Abort Related
+    Actions"
 
     Parameters
     ----------
@@ -998,12 +940,12 @@ def AA_7(dul):
     """
     # Send A-ABORT PDU.
     dul.pdu = A_ABORT_RQ()
-    dul.pdu.from_primitive(dul.primitive)
+    dul.pdu.FromParams(dul.primitive)
 
     # Callback
     dul.assoc.acse.debug_send_abort(dul.pdu)
 
-    dul.scu_socket.send(dul.pdu.encode())
+    dul.scu_socket.send(dul.pdu.Encode())
 
     return 'Sta13'
 
@@ -1018,10 +960,8 @@ def AA_8(dul):
     Evt10 + Sta3/5/8/9/10/11/12, Evt12 + Sta3/5/8/9/10/11/12,
     Evt13 + Sta3/5/6/8/9/12, Evt19 + Sta3/5/6/7/8/9/10/11/12
 
-    References
-    ----------
-    1. DICOM Standard 2015b, PS3.8, Table 9-7, "Associate Establishment
-       Related Actions"
+    .. [1] DICOM Standard 2015b, PS3.8, Table 9-9, "Associate Abort Related
+    Actions"
 
     Parameters
     ----------
@@ -1039,7 +979,7 @@ def AA_8(dul):
     dul.pdu.source = 0x02
     dul.pdu.reason_diagnostic = 0x00
 
-    dul.primitive = dul.pdu.to_primitive()
+    dul.primitive = dul.pdu.ToParams()
     dul.primitive.abort_source = 0x02
     dul.primitive.result = 0x01
     dul.primitive.diagnostic = 0x01
@@ -1050,7 +990,7 @@ def AA_8(dul):
 
         try:
             # Encode and send A-ABORT to peer
-            dul.scu_socket.send(dul.pdu.encode())
+            dul.scu_socket.send(dul.pdu.Encode())
         except socket.error:
             dul.scu_socket.close()
         except ConnectionResetError:

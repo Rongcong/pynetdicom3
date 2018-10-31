@@ -12,13 +12,12 @@ import os
 import socket
 import sys
 
-from pydicom import dcmread
-from pydicom.uid import (
-    ExplicitVRLittleEndian, ImplicitVRLittleEndian,
+from pydicom import read_file
+from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
     ExplicitVRBigEndian, DeflatedExplicitVRLittleEndian
-)
 
-from pynetdicom3 import AE, StoragePresentationContexts
+from pynetdicom3 import AE
+from pynetdicom3 import StorageSOPClassList
 
 logger = logging.Logger('storescu')
 stream_logger = logging.StreamHandler()
@@ -27,7 +26,7 @@ stream_logger.setFormatter(formatter)
 logger.addHandler(stream_logger)
 logger.setLevel(logging.ERROR)
 
-VERSION = '0.1.3'
+VERSION = '0.1.1'
 
 def _setup_argparser():
     """Setup the command line arguments"""
@@ -112,17 +111,17 @@ if args.debug:
     pynetdicom_logger.setLevel(logging.DEBUG)
 
 if args.version:
-    print('storescu.py v{0!s}'.format(VERSION))
+    print('storescu.py v{0!s} {1!s} $'.format(VERSION, '2017-02-04'))
     sys.exit()
 
-logger.debug('storescu.py v{0!s}'.format(VERSION))
+logger.debug('storescu.py v{0!s} {1!s}'.format(VERSION, '2017-02-04'))
 logger.debug('')
 
 # Check file exists and is readable and DICOM
 logger.debug('Checking input files')
 try:
     f = open(args.dcmfile_in, 'rb')
-    dataset = dcmread(f, force=True)
+    dataset = read_file(f, force=True)
     f.close()
 except IOError:
     logger.error('Cannot read input file {0!s}'.format(args.dcmfile_in))
@@ -142,13 +141,14 @@ elif args.request_implicit:
     transfer_syntax = [ImplicitVRLittleEndian]
 
 # Bind to port 0, OS will pick an available port
-ae = AE(ae_title=args.calling_aet, port=0)
-
-for context in StoragePresentationContexts:
-    ae.add_requested_context(context.abstract_syntax, transfer_syntax)
+ae = AE(ae_title=args.calling_aet,
+        port=0,
+        scu_sop_class=StorageSOPClassList,
+        scp_sop_class=[],
+        transfer_syntax=transfer_syntax)
 
 # Request association with remote
-assoc = ae.associate(args.peer, args.port, ae_title=args.called_aet)
+assoc = ae.associate(args.peer, args.port, args.called_aet)
 
 if assoc.is_established:
     logger.info('Sending file: {0!s}'.format(args.dcmfile_in))

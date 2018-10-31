@@ -112,9 +112,8 @@ sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes \
 #conda install --yes --quiet pip setuptools numpy matplotlib sphinx \
 #      pillow sphinx_rtd_theme numpydoc
 #conda install --yes --quiet -c conda-forge gdcm
-python3 -m venv venv
-. venv/bin/activate
-pip install numpy matplotlib sphinx pillow sphinx_rtd_theme numpydoc sphinx-gallery sphinxcontrib-napoleon
+pip install numpy matplotlib sphinx pillow sphinx_rtd_theme numpydoc
+pip install sphinx-gallery sphinxcontrib-napoleon
 
 # Add pydicom
 pip install pydicom

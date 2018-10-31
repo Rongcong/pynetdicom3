@@ -24,8 +24,7 @@ LOGGER = logging.getLogger('pynetdicom3.dul')
 
 
 class DULServiceProvider(Thread):
-    """The DICOM Upper Layer Service Provider.
-
+    """
     Three ways to call DULServiceProvider:
 
     - If a port number is given, the DUL will wait for incoming connections on
@@ -36,9 +35,9 @@ class DULServiceProvider(Thread):
 
     Attributes
     ----------
-    artim_timer : timer.Timer
+    artim_timer : pynetdicom3.timer.Timer
         The ARTIM timer
-    association : association.Association
+    association : pynetdicom3.association.Association
         The DUL's current Association
     dul_from_user_queue : queue.Queue
         Queue of PDUs from the DUL service user to be processed by the DUL
@@ -53,9 +52,10 @@ class DULServiceProvider(Thread):
     scu_socket : socket.socket()
         If the local AE is acting as an SCU, this is the connection from the
         local AE to the peer AE SCP
-    state_machine : fsm.StateMachine
+    state_machine : pynetdicom3.fsm.StateMachine
         The DICOM Upper Layer's State Machine
     """
+
     def __init__(self, socket=None, port=None, dul_timeout=None, assoc=None):
         """
         Parameters
@@ -67,7 +67,7 @@ class DULServiceProvider(Thread):
         dul_timeout : float, optional
             The maximum amount of time to wait for connection responses
             (in seconds)
-        assoc : association.Association
+        assoc : pynetdicom3.association.Association
             The DUL's current Association
         """
         if socket and port:
@@ -257,7 +257,7 @@ class DULServiceProvider(Thread):
 
             # Check the event queue to see if there is anything to do
             try:
-                event = self.event_queue.get(block=False)
+                event = self.event_queue.get(False)
             # If the queue is empty, return to the start of the loop
             except queue.Empty:
                 continue
@@ -366,7 +366,7 @@ class DULServiceProvider(Thread):
 
             # Convert the incoming PDU to a corresponding ServiceParameters
             #   object
-            self.primitive = self.pdu.to_primitive()
+            self.primitive = self.pdu.ToParams()
 
     def _check_incoming_primitive(self):
         """Check the incoming primitive."""
@@ -475,7 +475,7 @@ class DULServiceProvider(Thread):
 
         Parameters
         ----------
-        pdu : pdu.PDU
+        pdu : pynetdicom3.pdu.PDU
             The PDU
 
         Returns
@@ -509,7 +509,7 @@ class DULServiceProvider(Thread):
 
         Parameters
         ----------
-        primitive : pdu_primitives.ServiceParameter
+        primitive : pynetdicom3.pdu_primitives.ServiceParameter
             The Association primitive
 
         Returns
@@ -582,29 +582,26 @@ class DULServiceProvider(Thread):
 
         Returns
         -------
-        pdu : pdu.PDU
+        pdu : pynetdicom3.pdu.PDU
             The decoded data as a PDU object
         """
-        pdutype = unpack('B', data[:1])[0]
-
+        pdutype = unpack('B', data[0:1])[0]
         acse = self.assoc.acse
-        PDU_TYPES = {
-            0x01 : (A_ASSOCIATE_RQ, acse.debug_receive_associate_rq),
-            0x02 : (A_ASSOCIATE_AC, acse.debug_receive_associate_ac),
-            0x03 : (A_ASSOCIATE_RJ, acse.debug_receive_associate_rj),
-            0x04 : (P_DATA_TF, acse.debug_receive_data_tf),
-            0x05 : (A_RELEASE_RQ, acse.debug_receive_release_rq),
-            0x06 : (A_RELEASE_RP, acse.debug_receive_release_rp),
-            0x07 : (A_ABORT_RQ, acse.debug_receive_abort)
-        }
 
-        if pdutype in PDU_TYPES:
-            (pdu, acse_callback) = PDU_TYPES[pdutype]
-            pdu = pdu()
-            pdu.decode(data)
+        pdu_types = {0x01: (A_ASSOCIATE_RQ(), acse.debug_receive_associate_rq),
+                     0x02: (A_ASSOCIATE_AC(), acse.debug_receive_associate_ac),
+                     0x03: (A_ASSOCIATE_RJ(), acse.debug_receive_associate_rj),
+                     0x04: (P_DATA_TF(), acse.debug_receive_data_tf),
+                     0x05: (A_RELEASE_RQ(), acse.debug_receive_release_rq),
+                     0x06: (A_RELEASE_RP(), acse.debug_receive_release_rp),
+                     0x07: (A_ABORT_RQ(), acse.debug_receive_abort)}
+
+        if pdutype in pdu_types:
+            pdu = pdu_types[pdutype][0]
+            pdu.Decode(data)
 
             # ACSE callbacks
-            acse_callback(pdu)
+            pdu_types[pdutype][1](pdu)
 
             return pdu
 

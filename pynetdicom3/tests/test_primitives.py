@@ -4,23 +4,20 @@
 import logging
 import unittest
 
-import pytest
-
 from pydicom.uid import UID
 
 from pynetdicom3.pdu import A_ASSOCIATE_RQ, A_ABORT_RQ, P_DATA_TF
-from pynetdicom3.pdu_primitives import (
-    SOPClassExtendedNegotiation,
-    SOPClassCommonExtendedNegotiation,
-    MaximumLengthNegotiation,
-    ImplementationClassUIDNotification,
-    ImplementationVersionNameNotification,
-    P_DATA, A_RELEASE, A_ASSOCIATE, A_P_ABORT, A_ABORT,
-    SCP_SCU_RoleSelectionNegotiation,
-    AsynchronousOperationsWindowNegotiation,
-    UserIdentityNegotiation
-)
-from pynetdicom3.presentation import PresentationContext
+from pynetdicom3.pdu_primitives import SOPClassExtendedNegotiation, \
+                                   SOPClassCommonExtendedNegotiation, \
+                                   MaximumLengthNegotiation, \
+                                   ImplementationClassUIDNotification, \
+                                   ImplementationVersionNameNotification, \
+                                   P_DATA, A_RELEASE, A_ASSOCIATE, A_P_ABORT, \
+                                   A_ABORT, \
+                                   SCP_SCU_RoleSelectionNegotiation, \
+                                   AsynchronousOperationsWindowNegotiation, \
+                                   UserIdentityNegotiation
+from pynetdicom3.utils import PresentationContext
 from pynetdicom3.utils import pretty_bytes
 
 LOGGER = logging.getLogger('pynetdicom3')
@@ -303,9 +300,8 @@ class TestPrimitive_SCP_SCU_RoleSelectionNegotiation(unittest.TestCase):
         primitive = SCP_SCU_RoleSelectionNegotiation()
         primitive.sop_class_uid = b'1.2.840.10008.5.1.4.1.1.2'
         primitive.scu_role = True
-        item = primitive.from_primitive()
-        assert item.scu_role
-        assert not item.scp_role
+        with self.assertRaises(ValueError):
+            item = primitive.from_primitive()
 
         primitive = SCP_SCU_RoleSelectionNegotiation()
         primitive.scp_role = True
@@ -499,55 +495,51 @@ class TestPrimitive_SOPClassCommonExtendedNegotiation(unittest.TestCase):
         primitive.related_general_sop_class_identification = ['1.2.840.10008.5.1.4.1.1.88.22']
         item = primitive.from_primitive()
 
-        assert item.encode() == (
-            b'\x57\x00\x00\x4f\x00\x19\x31\x2e\x32\x2e\x38\x34\x30\x2e\x31\x30'
-            b'\x30\x30\x38\x2e\x35\x2e\x31\x2e\x34\x2e\x31\x2e\x31\x2e\x34\x00'
-            b'\x11\x31\x2e\x32\x2e\x38\x34\x30\x2e\x31\x30\x30\x30\x38\x2e\x34'
-            b'\x2e\x32\x00\x1f\x00\x1d\x31\x2e\x32\x2e\x38\x34\x30\x2e\x31\x30'
-            b'\x30\x30\x38\x2e\x35\x2e\x31\x2e\x34\x2e\x31\x2e\x31\x2e\x38\x38'
-            b'\x2e\x32\x32'
-        )
+        self.assertTrue(item.encode() == b'\x57\x00\x00\x4d\x00\x19\x31\x2e\x32\x2e\x38\x34\x30\x2e\x31\x30' \
+                                         b'\x30\x30\x38\x2e\x35\x2e\x31\x2e\x34\x2e\x31\x2e\x31\x2e\x34\x00' \
+                                         b'\x11\x31\x2e\x32\x2e\x38\x34\x30\x2e\x31\x30\x30\x30\x38\x2e\x34' \
+                                         b'\x2e\x32\x00\x1d\x00\x1d\x31\x2e\x32\x2e\x38\x34\x30\x2e\x31\x30' \
+                                         b'\x30\x30\x38\x2e\x35\x2e\x31\x2e\x34\x2e\x31\x2e\x31\x2e\x38\x38' \
+                                         b'\x2e\x32\x32')
 
 
-class TestPrimitive_UserIdentityNegotiation(object):
+class TestPrimitive_UserIdentityNegotiation(unittest.TestCase):
     def test_assignment_and_exceptions(self):
         """ Check incorrect types/values for properties raise exceptions """
         primitive = UserIdentityNegotiation()
         primitive.user_identity_type = 1
-        assert primitive.user_identity_type == 1
-        with pytest.raises(ValueError):
+        self.assertEqual(primitive.user_identity_type, 1)
+        with self.assertRaises(ValueError):
             primitive.user_identity_type = 5
-        with pytest.raises(TypeError):
+        with self.assertRaises(TypeError):
             primitive.user_identity_type = 'a'
 
         primitive.positive_response_requested = True
-        assert primitive.positive_response_requested
-        with pytest.raises(TypeError):
+        self.assertTrue(primitive.positive_response_requested)
+        with self.assertRaises(TypeError):
             primitive.positive_response_requested = 'test'
 
         primitive.primary_field = b'\x00\x01'
-        assert primitive.primary_field == b'\x00\x01'
-        with pytest.raises(TypeError):
+        self.assertEqual(primitive.primary_field, b'\x00\x01')
+        with self.assertRaises(TypeError):
             primitive.primary_field = ['test']
 
         primitive.secondary_field = b'\x00\x21'
-        assert primitive.secondary_field == b'\x00\x21'
-        primitive.secondary_field = None
-        assert primitive.secondary_field is None
-        with pytest.raises(TypeError):
+        self.assertEqual(primitive.secondary_field, b'\x00\x21')
+        with self.assertRaises(TypeError):
             primitive.secondary_field = ['test']
 
         primitive.server_response = b'\x00\x31'
-        assert primitive.server_response == b'\x00\x31'
-        with pytest.raises(TypeError):
+        self.assertEqual(primitive.server_response, b'\x00\x31')
+        with self.assertRaises(TypeError):
             primitive.server_response = ['test']
 
         primitive = UserIdentityNegotiation()
-        with pytest.raises(ValueError):
+        with self.assertRaises(ValueError):
             primitive.from_primitive()
 
         primitive.user_identity_type = 2
-        with pytest.raises(ValueError):
+        with self.assertRaises(ValueError):
             primitive.from_primitive()
 
     def test_string(self):
@@ -557,13 +549,13 @@ class TestPrimitive_UserIdentityNegotiation(object):
         primitive.positive_response_requested = True
         primitive.primary_field = b'\x00\x01'
         primitive.secondary_field = b'\x00\x21'
-        assert 'requested: True' in primitive.__str__()
-        assert 'type: 1' in primitive.__str__()
-        assert 'Primary' in primitive.__str__()
-        assert 'Secondary' in primitive.__str__()
+        self.assertTrue('requested: True' in primitive.__str__())
+        self.assertTrue('type: 1' in primitive.__str__())
+        self.assertTrue('Primary' in primitive.__str__())
+        self.assertTrue('Secondary' in primitive.__str__())
 
         primitive.server_response = b'\x00\x31'
-        assert 'Server response' in primitive.__str__()
+        self.assertTrue('Server response' in primitive.__str__())
 
     def test_conversion(self):
         """ Check converting to PDU item works correctly """
@@ -574,15 +566,15 @@ class TestPrimitive_UserIdentityNegotiation(object):
         item = primitive.from_primitive()
 
         primitive.user_identity_type = 2
-        primitive.secondary_field = b''
-        with pytest.raises(ValueError):
+        primitive.secondary_field = None
+        with self.assertRaises(ValueError):
             item = primitive.from_primitive()
 
         # -AC
         primitive = UserIdentityNegotiation()
         primitive.server_response = b'Test'
         item = primitive.from_primitive()
-        assert item.encode() == b'\x59\x00\x00\x06\x00\x04\x54\x65\x73\x74'
+        self.assertTrue(item.encode() == b'\x59\x00\x00\x06\x00\x04\x54\x65\x73\x74')
 
 
 class TestPrimitive_A_ASSOCIATE(unittest.TestCase):
@@ -650,17 +642,15 @@ class TestPrimitive_A_ASSOCIATE(unittest.TestCase):
         assoc.called_presentation_address = ('10.40.94.44', 106)
         self.assertTrue(assoc.called_presentation_address == ('10.40.94.44', 106))
 
-        pc = PresentationContext()
-        pc.context_id = 1
-        assoc.presentation_context_definition_list = [pc]
-        self.assertTrue(assoc.presentation_context_definition_list == [pc])
-        assoc.presentation_context_definition_list = ['a', pc]
-        self.assertTrue(assoc.presentation_context_definition_list == [pc])
+        assoc.presentation_context_definition_list = [PresentationContext(1)]
+        self.assertTrue(assoc.presentation_context_definition_list == [PresentationContext(1)])
+        assoc.presentation_context_definition_list = ['a', PresentationContext(1)]
+        self.assertTrue(assoc.presentation_context_definition_list == [PresentationContext(1)])
 
-        assoc.presentation_context_definition_results_list = [pc]
-        self.assertTrue(assoc.presentation_context_definition_results_list == [pc])
-        assoc.presentation_context_definition_results_list = ['a', pc]
-        self.assertTrue(assoc.presentation_context_definition_results_list == [pc])
+        assoc.presentation_context_definition_results_list = [PresentationContext(1)]
+        self.assertTrue(assoc.presentation_context_definition_results_list == [PresentationContext(1)])
+        assoc.presentation_context_definition_results_list = ['a', PresentationContext(1)]
+        self.assertTrue(assoc.presentation_context_definition_results_list == [PresentationContext(1)])
 
         assoc = A_ASSOCIATE()
         # No maximum_length_received set
@@ -803,14 +793,11 @@ class TestPrimitive_A_ASSOCIATE(unittest.TestCase):
         imp_ver_name.implementation_version_name = 'PYNETDICOM_090'
         assoc.user_information.append(imp_ver_name)
 
-        pc = PresentationContext()
-        pc.context_id = 1
-        pc.abstract_syntax = '1.2.840.10008.1.1'
-        pc.transfer_syntax = ['1.2.840.10008.1.2']
-        assoc.presentation_context_definition_list = [pc]
+        assoc.presentation_context_definition_list = \
+            [PresentationContext(1, '1.2.840.10008.1.1', ['1.2.840.10008.1.2'])]
 
         pdu = A_ASSOCIATE_RQ()
-        pdu.from_primitive(assoc)
+        pdu.FromParams(assoc)
         data = pdu.encode()
 
         ref = b"\x01\x00\x00\x00\x00\xd1\x00\x01\x00\x00\x41\x4e\x59\x2d\x53\x43" \
@@ -828,7 +815,7 @@ class TestPrimitive_A_ASSOCIATE(unittest.TestCase):
               b"\x30\x2e\x39\x2e\x30\x55\x00\x00\x0e\x50\x59\x4e\x45\x54\x44\x49" \
               b"\x43\x4f\x4d\x5f\x30\x39\x30"
 
-        assert data == ref
+        self.assertTrue(data == ref)
 
 
 class TestPrimitive_A_RELEASE(unittest.TestCase):
@@ -876,7 +863,7 @@ class TestPrimitive_A_ABORT(unittest.TestCase):
         primitive.abort_source = 0
 
         pdu = A_ABORT_RQ()
-        pdu.from_primitive(primitive)
+        pdu.FromParams(primitive)
         data = pdu.encode()
 
         self.assertEqual(data, b"\x07\x00\x00\x00\x00\x04\x00\x00\x00\x00")
@@ -914,7 +901,7 @@ class TestPrimitive_A_P_ABORT(unittest.TestCase):
         primitive.provider_reason = 4
 
         pdu = A_ABORT_RQ()
-        pdu.from_primitive(primitive)
+        pdu.FromParams(primitive)
         data = pdu.encode()
 
         self.assertEqual(data, b"\x07\x00\x00\x00\x00\x04\x00\x00\x02\x04")
@@ -955,7 +942,7 @@ class TestPrimitive_P_DATA(unittest.TestCase):
         primitive.presentation_data_value_list = [[1, pdv]]
 
         pdu = P_DATA_TF()
-        pdu.from_primitive(primitive)
+        pdu.FromParams(primitive)
         data = pdu.encode()
 
         self.assertEqual(data,
@@ -974,14 +961,18 @@ class TestPrimitive_P_DATA(unittest.TestCase):
         self.assertTrue('Byte: 00000011' in primitive.__str__())
 
 
-class TestServiceParameter(object):
+class TestServiceParameter(unittest.TestCase):
     def test_equality(self):
         """Test equality of ServiceParameter subclasses."""
         prim_a = MaximumLengthNegotiation()
         prim_b = MaximumLengthNegotiation()
-        assert prim_a == prim_b
-        assert not prim_a == 'test'
-        assert not prim_a != prim_b
+        self.assertTrue(prim_a == prim_b)
+        self.assertFalse(prim_a == 'test')
+        self.assertFalse(prim_a != prim_b)
         prim_b.maximum_length_received = 12
-        assert not prim_a == prim_b
-        assert prim_a != prim_b
+        self.assertFalse(prim_a == prim_b)
+        self.assertTrue(prim_a != prim_b)
+
+
+if __name__ == "__main__":
+    unittest.main()

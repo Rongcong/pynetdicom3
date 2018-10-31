@@ -17,8 +17,7 @@ from pydicom.uid import (
     ExplicitVRLittleEndian, ImplicitVRLittleEndian, ExplicitVRBigEndian
 )
 
-from pynetdicom3 import AE
-from pynetdicom3.sop_class import VerificationSOPClass
+from pynetdicom3 import AE, VerificationSOPClass
 
 LOGGER = logging.Logger('echoscp')
 stream_logger = logging.StreamHandler()
@@ -27,7 +26,7 @@ stream_logger.setFormatter(formatter)
 LOGGER.addHandler(stream_logger)
 LOGGER.setLevel(logging.ERROR)
 
-VERSION = '0.4.1'
+VERSION = '0.3.0'
 
 
 def _setup_argparser():
@@ -169,10 +168,9 @@ transfer_syntax = [ImplicitVRLittleEndian,
                    ExplicitVRLittleEndian,
                    ExplicitVRBigEndian]
 
-if args.prefer_uncompr:
-    transfer_syntax = [ExplicitVRLittleEndian,
-                       ExplicitVRBigEndian,
-                       ImplicitVRLittleEndian]
+if args.prefer_uncompr and ImplicitVRLittleEndian in transfer_syntax:
+    transfer_syntax.remove(ImplicitVRLittleEndian)
+    transfer_syntax.append(ImplicitVRLittleEndian)
 
 if args.implicit:
     transfer_syntax = [ImplicitVRLittleEndian]
@@ -186,7 +184,7 @@ if args.prefer_big and ExplicitVRBigEndian in transfer_syntax:
     transfer_syntax.insert(0, ExplicitVRBigEndian)
 
 
-def on_c_echo(context, info):
+def on_c_echo():
     """Optional implementation of the AE.on_c_echo callback."""
     # Return a Success response to the peer
     # We could also return a pydicom Dataset with a (0000, 0900) Status
@@ -195,8 +193,12 @@ def on_c_echo(context, info):
 
 
 # Create application entity
-ae = AE(ae_title=args.aetitle, port=args.port)
-ae.add_supported_context(VerificationSOPClass, transfer_syntax)
+ae = AE(ae_title=args.aetitle,
+        port=args.port,
+        scu_sop_class=[],
+        scp_sop_class=[VerificationSOPClass],
+        transfer_syntax=transfer_syntax)
+
 ae.maximum_pdu_size = args.max_pdu
 
 # Set timeouts

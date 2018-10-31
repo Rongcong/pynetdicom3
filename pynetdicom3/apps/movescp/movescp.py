@@ -11,28 +11,19 @@ import socket
 import sys
 import time
 
-from pydicom import dcmread
+from pydicom import read_file
 from pydicom.dataset import Dataset
-from pydicom.uid import (
-    ExplicitVRLittleEndian, ImplicitVRLittleEndian, ExplicitVRBigEndian
-)
+from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
+    ExplicitVRBigEndian
 
-from pynetdicom3 import (
-    AE,
-    QueryRetrievePresentationContexts,
-    StoragePresentationContexts
-)
+from pynetdicom3 import AE, QueryRetrieveSOPClassList, StorageSOPClassList
 
-LOGGER = logging.Logger('movescp')
+logger = logging.Logger('movescp')
 stream_logger = logging.StreamHandler()
 formatter = logging.Formatter('%(levelname).1s: %(message)s')
 stream_logger.setFormatter(formatter)
-LOGGER.addHandler(stream_logger)
-LOGGER.setLevel(logging.ERROR)
-
-
-VERSION = '0.2.1'
-
+logger.addHandler(stream_logger)
+logger.setLevel(logging.ERROR)
 
 def _setup_argparser():
     """Setup the command line arguments"""
@@ -123,15 +114,15 @@ def _setup_argparser():
 args = _setup_argparser()
 
 if args.verbose:
-    LOGGER.setLevel(logging.INFO)
+    logger.setLevel(logging.INFO)
 
 if args.debug:
-    LOGGER.setLevel(logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
     pynetdicom_logger = logging.getLogger('pynetdicom3')
     pynetdicom_logger.setLevel(logging.DEBUG)
 
-LOGGER.debug('$movescp.py v{0!s}'.format(VERSION))
-LOGGER.debug('')
+logger.debug('$movescp.py v{0!s} {1!s} $'.format('0.1.0', '2016-04-12'))
+logger.debug('')
 
 # Validate port
 if isinstance(args.port, int):
@@ -140,7 +131,7 @@ if isinstance(args.port, int):
     try:
         test_socket.bind((os.popen('hostname').read()[:-1], args.port))
     except socket.error:
-        LOGGER.error("Cannot listen on port {0:d}, insufficient priveleges".format(args.port))
+        logger.error("Cannot listen on port {0:d}, insufficient priveleges".format(args.port))
         sys.exit()
 
 # Set Transfer Syntax options
@@ -159,36 +150,32 @@ if args.prefer_big and ExplicitVRBigEndian in transfer_syntax:
         transfer_syntax.remove(ExplicitVRBigEndian)
         transfer_syntax.insert(0, ExplicitVRBigEndian)
 
-def on_c_move(dataset, move_aet, context, info):
+def on_c_move(dataset, move_aet):
     """Implement the on_c_move callback"""
     basedir = '../../tests/dicom_files/'
     dcm_files = ['RTImageStorage.dcm']
     dcm_files = [os.path.join(basedir, x) for x in dcm_files]
 
-    # Address and port to send to
-    if move_aet == b'ANY-SCP         ':
-        yield '127.0.0.1', 104
-    else:
-        yield None, None
-
     # Number of matches
     yield len(dcm_files)
 
+    # Address and port to send to
+    if move_aet == b'ANY-SCP         ':
+        yield '10.40.94.43', 104
+    else:
+        yield None, None
+
     # Matching datasets to send
     for dcm in dcm_files:
-        ds = dcmread(dcm, force=True)
+        ds = read_file(dcm, force=True)
         yield 0xff00, ds
 
 # Create application entity
-ae = AE(ae_title=args.aetitle, port=args.port)
-
-# Add the requested Storage Service presentation contexts
-for context in StoragePresentationContexts:
-    ae.add_requested_context(context.abstract_syntax, transfer_syntax)
-
-# Add the supported QR Service presentation contexts
-for context in QueryRetrievePresentationContexts:
-    ae.add_supported_context(context.abstract_syntax, transfer_syntax)
+ae = AE(ae_title=args.aetitle,
+        port=args.port,
+        scu_sop_class=StorageSOPClassList,
+        scp_sop_class=QueryRetrieveSOPClassList,
+        transfer_syntax=transfer_syntax)
 
 ae.maximum_pdu_size = args.max_pdu
 

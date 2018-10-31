@@ -51,7 +51,6 @@ clean:
 	-rm -rf $(BUILDDIR)/*
 	-rm -rf auto_examples/
 	-rm -rf generated/*
-	-rm -rf reference/generated/*
 	-rm -rf modules/generated/*
 
 html:
