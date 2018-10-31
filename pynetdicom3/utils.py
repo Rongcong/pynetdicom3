@@ -239,9 +239,8 @@ class PresentationContext(object):
             # Issue #62: private transfer syntaxes may be used
             if not transfer_syntax.is_private and \
                                 not transfer_syntax.is_transfer_syntax:
-            # if not transfer_syntax.is_transfer_syntax:
-            #     raise ValueError('Presentation Context attempted to add a '
-            #                      'non-transfer syntax UID')
+                raise ValueError('Presentation Context attempted to add a '
+                                 'non-transfer syntax UID')
             self.TransferSyntax.append(transfer_syntax)
 
     def __eq__(self, other):
@@ -364,6 +363,7 @@ class PresentationContext(object):
 
             # if uid.is_private:
             #     self._transfer_syntax.append(uid)
+            # elif uid.is_transfer_syntax:
             if uid.is_transfer_syntax:
                 self._transfer_syntax.append(uid)
 
