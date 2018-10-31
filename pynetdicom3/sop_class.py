@@ -1416,7 +1416,7 @@ _VERIFICATION_CLASSES = {'VerificationSOPClass' : '1.2.840.10008.1.1'}
 # pylint: disable=line-too-long
 _STORAGE_CLASSES = {'ComputedRadiographyImageStorage' : '1.2.840.10008.5.1.4.1.1.1',
                     'DigitalXRayImagePresentationStorage' : '1.2.840.10008.5.1.4.1.1.1.1',
-                    'DigitalXRayImageProcessingStorage' : '1.2.840.10008.5.1.4.1.1.1.1.1.1',
+                    'DigitalXRayImageProcessingStorage' : '1.2.840.10008.5.1.4.1.1.1.1.1',
                     'DigitalMammographyXRayImagePresentationStorage' : '1.2.840.10008.5.1.4.1.1.1.2',
                     'DigitalMammographyXRayImageProcessingStorage' : '1.2.840.10008.5.1.4.1.1.1.2.1',
                     'DigitalIntraOralXRayImagePresentationStorage' : '1.2.840.10008.5.1.4.1.1.1.3',
